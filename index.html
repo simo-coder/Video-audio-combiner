@@ -100,6 +100,17 @@ progress[hidden] { display: none; }
 .result h2 { margin: 0 0 .75rem; font-size: 1.2rem; }
 .result video { max-height: 28rem; margin: 0 auto; }
 .result .actions { margin-top: 1rem; }
+.margin-row { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 1.25rem; }
+.margin-row input[type=range] { flex: 1 1 12rem; min-width: 10rem; accent-color: var(--video); }
+.num { display: inline-flex; align-items: center; gap: .4rem; font-weight: 500; }
+.num input, .screen input { font: inherit; width: 4.5rem; padding: .4rem .5rem; border: 2px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); }
+.num input:focus-visible, .screen input:focus-visible, input[type=range]:focus-visible { outline: 3px solid var(--video); outline-offset: 2px; }
+.pv { position: relative; height: 120px; background: #000; border: 2px solid var(--line); border-radius: 8px; flex: none; }
+.pv i { position: absolute; background: var(--video); border-radius: 2px; }
+.screen { margin-top: .75rem; font-size: .92rem; }
+.screen summary { cursor: pointer; color: var(--muted); }
+.screen label { display: flex; align-items: center; gap: .5rem; margin-top: .5rem; }
+.screen small { display: block; color: var(--muted); margin-top: .35rem; max-width: 52ch; }
 .privacy { margin-top: 2.5rem; color: var(--muted); font-size: .88rem; max-width: 60ch; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -163,13 +174,28 @@ progress[hidden] { display: none; }
     <label class="opt"><input type="radio" name="shape" value="landscape">
       <span>Landscape<small>Wide, 16:9, for YouTube and computer screens.</small></span></label>
     <div id="fit-group" hidden>
-      <p class="note" id="shape-note"></p>
       <label class="opt"><input type="radio" name="fit" value="bars" checked>
         <span>Fit the whole picture<small>Black bars fill the empty space.</small></span></label>
       <label class="opt"><input type="radio" name="fit" value="crop">
         <span>Fill the frame<small>Crops the edges so there are no bars.</small></span></label>
     </div>
     <p class="note" id="shape-info" hidden></p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Border around the picture</legend>
+    <p class="note" style="margin-top:0">A thin black border keeps phone buttons and rounded screen corners from covering the edges of the video.</p>
+    <div class="margin-row">
+      <input type="range" id="margin-range" min="0" max="1.5" step="0.1" value="0.3" aria-label="Border size in centimetres">
+      <label class="num"><input type="number" id="margin-num" min="0" max="1.5" step="0.1" value="0.3" aria-label="Border size in centimetres"> cm</label>
+      <div class="pv" id="pv" aria-hidden="true"><i id="pv-in"></i></div>
+    </div>
+    <details class="screen">
+      <summary>Sized for a phone screen about <span id="screen-label">6.5</span> cm wide</summary>
+      <label>Phone screen width <input type="number" id="screen-cm" min="3" max="12" step="0.1" value="6.5"> cm</label>
+      <small>Measure across the shorter side of your phone's screen. The border is sized as if the shorter side of the video fills that width.</small>
+    </details>
+    <p class="note" id="plan-note"></p>
   </fieldset>
 
   <fieldset>
@@ -227,7 +253,7 @@ progress[hidden] { display: none; }
     player.src = url;
     player.onloadedmetadata = () => {
       state[kind === 'video' ? 'vDur' : 'aDur'] = player.duration;
-      if (kind === 'video') { state.vW = player.videoWidth; state.vH = player.videoHeight; updateShape(); }
+      if (kind === 'video') { state.vW = player.videoWidth; state.vH = player.videoHeight; updatePlan(); }
       $('#dur-' + kind).textContent = fmt(player.duration);
       updateTimeline();
     };
@@ -332,10 +358,13 @@ progress[hidden] { display: none; }
     return state.ffLoading;
   }
 
-  // ---------- shape (portrait / landscape)
+  // ---------- shape (portrait / landscape) and border
   const shape = () => document.querySelector('input[name=shape]:checked').value;
   const fit = () => document.querySelector('input[name=fit]:checked').value;
-  // Returns the output size when the video must be resized, or null when it can stay as it is.
+  const evenN = (n) => Math.max(2, Math.floor(n / 2) * 2);
+  const marginCm = () => { const v = parseFloat($('#margin-num').value); return isFinite(v) ? Math.max(0, Math.min(1.5, v)) : 0; };
+  const screenCm = () => { const v = parseFloat($('#screen-cm').value); return isFinite(v) && v >= 3 ? v : 6.5; };
+  // Returns the output size when the video must be resized to a new shape, or null when it can stay as it is.
   function target() {
     const s = shape();
     if (s === 'keep' || !state.vW || !state.vH) return null;
@@ -343,17 +372,44 @@ progress[hidden] { display: none; }
     if ((s === 'portrait' && srcPortrait) || (s === 'landscape' && !srcPortrait)) return null;
     return s === 'portrait' ? { w: 720, h: 1280 } : { w: 1280, h: 720 };
   }
-  function updateShape() {
-    const t = target(), info = $('#shape-info'), s = shape();
+  // The full plan: output size plus the border in pixels. Null means the video can be copied untouched.
+  function plan() {
+    if (!state.vW || !state.vH) return null;
+    const t = target();
+    const w = t ? t.w : evenN(state.vW), h = t ? t.h : evenN(state.vH);
+    let m = Math.round(marginCm() / screenCm() * Math.min(w, h));
+    m = Math.floor(Math.min(m, Math.min(w, h) / 4) / 2) * 2;
+    if (!t && m === 0) return null;
+    return { w, h, m, resize: !!t };
+  }
+  function filterFor(p) {
+    const iw = p.w - 2 * p.m, ih = p.h - 2 * p.m;
+    const first = p.resize && fit() === 'crop'
+      ? `scale=${iw}:${ih}:force_original_aspect_ratio=increase,crop=${iw}:${ih}`
+      : `scale=${iw}:${ih}:force_original_aspect_ratio=decrease`;
+    return `${first},pad=${p.w}:${p.h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1`;
+  }
+  function updatePlan() {
+    const t = target(), s = shape(), info = $('#shape-info'), p = plan();
     $('#fit-group').hidden = !t;
     info.hidden = !(s !== 'keep' && state.vW && !t);
-    if (!info.hidden) info.textContent = `Your video is already ${s}, so it stays as it is.`;
-    if (t) $('#shape-note').textContent = `Your video will be resized to ${t.w} x ${t.h}. This re-encodes it, so it takes longer.`;
+    if (!info.hidden) info.textContent = `Your video is already ${s}, so its shape stays as it is.`;
+    $('#screen-label').textContent = screenCm();
+    const note = $('#plan-note');
+    if (!state.vW) note.textContent = 'Add a video to see what the final size will be.';
+    else if (!p) note.textContent = 'Only the sound changes. The picture is copied as it is, which is fast.';
+    else note.textContent = `Final video: ${p.w} x ${p.h}` + (p.m ? `, with a ${p.m} px black border on every side (${marginCm().toFixed(1)} cm on the phone screen)` : '') + '. The picture is re-encoded, so this takes longer.';
+    // preview of the border
+    const pw = p ? p.w : (state.vW || 9), ph = p ? p.h : (state.vH || 16), box = $('#pv'), inner = $('#pv-in');
+    box.style.width = Math.round(120 * pw / ph) + 'px';
+    const m = p ? p.m : 0;
+    inner.style.inset = `${m / ph * 100}% ${m / pw * 100}%`;
   }
-  document.querySelectorAll('input[name=shape]').forEach((r) => r.addEventListener('change', updateShape));
-  const filterFor = (t) => fit() === 'crop'
-    ? `scale=${t.w}:${t.h}:force_original_aspect_ratio=increase,crop=${t.w}:${t.h},setsar=1`
-    : `scale=${t.w}:${t.h}:force_original_aspect_ratio=decrease,pad=${t.w}:${t.h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1`;
+  const syncMargin = (from, to) => from.addEventListener('input', () => { to.value = from.value; updatePlan(); });
+  syncMargin($('#margin-range'), $('#margin-num')); syncMargin($('#margin-num'), $('#margin-range'));
+  $('#screen-cm').addEventListener('input', updatePlan);
+  document.querySelectorAll('input[name=shape]').forEach((r) => r.addEventListener('change', updatePlan));
+  updatePlan();
 
   // ---------- create
   const mode = () => document.querySelector('input[name=mode]:checked').value;
@@ -385,11 +441,11 @@ progress[hidden] { display: none; }
       if (mode() === 'full') tail.push('-af', 'apad');
       tail.push(...(isFinite(len) ? ['-t', len.toFixed(3)] : ['-shortest']), '-movflags', '+faststart', 'output.mp4');
       const enc = ['-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-pix_fmt', 'yuv420p'];
-      const t = target();
+      const pl = plan();
       let code;
-      if (t) {
-        setStatus(`Resizing to ${t.w} x ${t.h} and replacing the sound. This takes longer.`);
-        code = await ff.exec([...base, '-vf', filterFor(t), ...enc, ...tail]);
+      if (pl) {
+        setStatus(`Adding the border${pl.resize ? ', resizing' : ''} and replacing the sound. This takes longer.`);
+        code = await ff.exec([...base, '-vf', filterFor(pl), ...enc, ...tail]);
       } else {
         code = await ff.exec([...base, '-c:v', 'copy', ...tail]);
         if (code !== 0) {
@@ -422,14 +478,18 @@ progress[hidden] { display: none; }
       await new Promise((res, rej) => { v.onloadedmetadata = res; v.onerror = () => rej(new Error('The video could not be read.')); });
       const buf = await ctx.decodeAudioData(await state.audio.arrayBuffer());
       const dest = ctx.createMediaStreamDestination(), src = ctx.createBufferSource(); src.buffer = buf; src.connect(dest);
-      const t = target(); let drawLoop = null, vTracks;
-      if (t) {
-        const c = document.createElement('canvas'); c.width = t.w; c.height = t.h; const g = c.getContext('2d');
+      const pl = plan(); let drawLoop = null, vTracks;
+      if (pl) {
+        const c = document.createElement('canvas'); c.width = pl.w; c.height = pl.h; const g = c.getContext('2d');
+        const ix = pl.m, iy = pl.m, iw = pl.w - 2 * pl.m, ih = pl.h - 2 * pl.m;
         drawLoop = () => {
           if (finished) return;
-          const vw = v.videoWidth, vh = v.videoHeight;
-          const k = fit() === 'crop' ? Math.max(t.w / vw, t.h / vh) : Math.min(t.w / vw, t.h / vh), dw = vw * k, dh = vh * k;
-          g.fillStyle = '#000'; g.fillRect(0, 0, t.w, t.h); g.drawImage(v, (t.w - dw) / 2, (t.h - dh) / 2, dw, dh);
+          const vw = v.videoWidth, vh = v.videoHeight, cover = pl.resize && fit() === 'crop';
+          const k = cover ? Math.max(iw / vw, ih / vh) : Math.min(iw / vw, ih / vh), dw = vw * k, dh = vh * k;
+          g.fillStyle = '#000'; g.fillRect(0, 0, pl.w, pl.h);
+          g.save(); g.beginPath(); g.rect(ix, iy, iw, ih); g.clip();
+          g.drawImage(v, ix + (iw - dw) / 2, iy + (ih - dh) / 2, dw, dh);
+          g.restore();
           requestAnimationFrame(drawLoop);
         };
         vTracks = c.captureStream(30).getVideoTracks();
