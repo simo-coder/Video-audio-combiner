@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Swap the sound on a video</title>
+<meta name="description" content="Replace a video's original sound with your own audio file. Runs entirely in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --paper: #eceff5; --panel: #ffffff; --ink: #101a33; --muted: #566280; --line: #c9d1e2;
+  --video: #2748f0; --wave: #e08a00; --danger: #b42318; --ok: #0b7a4b; --btn-text: #ffffff;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0c1222; --panel: #151e36; --ink: #e8ecf7; --muted: #94a1c2; --line: #2a3556;
+    --video: #8aa0ff; --wave: #ffb84d; --danger: #ff8a7a; --ok: #5fd6a0; --btn-text: #0c1222;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { background: var(--paper); }
+body {
+  margin: 0; color: var(--ink); background: var(--paper);
+  font-family: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 1rem; line-height: 1.5;
+}
+main { max-width: 760px; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
+h1 { font-size: clamp(2rem, 6vw, 3.1rem); line-height: 1.05; letter-spacing: -0.03em; font-weight: 800; margin: 0 0 .75rem; }
+.lede { color: var(--muted); max-width: 46ch; margin: 0 0 2rem; font-size: 1.075rem; }
+.pair { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+@media (min-width: 680px) { .pair { grid-template-columns: 1fr 1fr; } }
+
+.zone {
+  position: relative; background: var(--panel); border: 2px dashed var(--line); border-radius: 18px;
+  min-height: 15rem; padding: 1.1rem; display: flex; flex-direction: column;
+  transition: border-color .15s, background-color .15s;
+}
+.zone.has-file { border-style: solid; }
+.zone.drag { border-color: var(--video); }
+.zone:has(input:focus-visible) { outline: 3px solid var(--video); outline-offset: 3px; }
+.zone h2 { font-size: 1.05rem; margin: 0; font-weight: 700; }
+.zone .hint { color: var(--muted); font-size: .92rem; margin: .15rem 0 0; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.prompt {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+  gap: .35rem; cursor: pointer; padding: 1rem 0 .5rem; color: var(--muted);
+}
+.prompt svg { width: 44px; height: 44px; color: var(--ink); margin-bottom: .25rem; }
+.prompt strong { color: var(--ink); font-size: 1.05rem; }
+.prompt span { font-size: .9rem; }
+.filled { display: flex; flex-direction: column; gap: .7rem; margin-top: .75rem; flex: 1; }
+.filled[hidden], .prompt[hidden] { display: none; }
+.filename { font-weight: 500; font-size: .95rem; overflow-wrap: anywhere; display: flex; justify-content: space-between; gap: .75rem; align-items: baseline; }
+.filename small { color: var(--muted); white-space: nowrap; font-size: .88rem; }
+video, audio { width: 100%; border-radius: 12px; background: #000; display: block; }
+audio { background: transparent; height: 40px; }
+video { max-height: 15rem; }
+canvas { width: 100%; height: 64px; display: block; }
+.chip { display: inline-flex; align-items: center; gap: .4rem; font-size: .85rem; color: var(--muted); }
+.chip svg { width: 18px; height: 18px; color: var(--danger); flex: none; }
+.replace { align-self: flex-start; font-size: .9rem; color: var(--video); font-weight: 500; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.zone-error { color: var(--danger); font-size: .9rem; margin: .5rem 0 0; }
+
+.timeline { margin-top: 1.5rem; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 1rem 1.1rem; }
+.timeline[hidden] { display: none; }
+.timeline h3 { margin: 0 0 .7rem; font-size: .98rem; font-weight: 700; }
+.row { display: grid; grid-template-columns: 4.5rem 1fr 3.2rem; align-items: center; gap: .7rem; font-size: .9rem; }
+.row + .row { margin-top: .5rem; }
+.row .bar { height: 12px; border-radius: 6px; transition: width .3s; }
+.row .t { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+.bar.v { background: var(--video); } .bar.a { background: var(--wave); }
+.note { margin: .7rem 0 0; font-size: .9rem; color: var(--muted); }
+
+fieldset { border: 0; padding: 0; margin: 1.5rem 0 0; }
+legend { font-weight: 700; padding: 0; margin-bottom: .5rem; }
+.opt { display: flex; gap: .6rem; align-items: flex-start; padding: .35rem 0; cursor: pointer; }
+.opt input { margin-top: .3rem; accent-color: var(--video); width: 1.05rem; height: 1.05rem; flex: none; }
+.opt small { display: block; color: var(--muted); }
+
+.actions { margin-top: 1.5rem; display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; }
+button, .btn {
+  font: inherit; font-weight: 700; border: 0; border-radius: 12px; padding: .85rem 1.5rem; cursor: pointer;
+  background: var(--ink); color: var(--paper); text-decoration: none; display: inline-block;
+}
+button:disabled { opacity: .4; cursor: not-allowed; }
+button.secondary { background: transparent; color: var(--ink); border: 2px solid var(--line); }
+button:focus-visible, .btn:focus-visible, .replace:focus-visible { outline: 3px solid var(--video); outline-offset: 3px; }
+.status { margin: 1rem 0 0; min-height: 1.5rem; color: var(--muted); }
+.status.err { color: var(--danger); } .status.ok { color: var(--ok); }
+progress { width: 100%; height: 10px; margin-top: .6rem; accent-color: var(--video); }
+progress[hidden] { display: none; }
+
+.result { margin-top: 2rem; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 1.1rem; }
+.result[hidden] { display: none; }
+.result h2 { margin: 0 0 .75rem; font-size: 1.2rem; }
+.result video { max-height: 28rem; margin: 0 auto; }
+.result .actions { margin-top: 1rem; }
+.privacy { margin-top: 2.5rem; color: var(--muted); font-size: .88rem; max-width: 60ch; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Swap the sound on a video</h1>
+  <p class="lede">Add a video and an audio file. The video's original sound is removed and your audio plays in its place.</p>
+
+  <div class="pair">
+    <section class="zone" id="zone-video" aria-labelledby="h-video">
+      <h2 id="h-video">Video</h2>
+      <p class="hint">Its original sound will be removed.</p>
+      <input class="sr" id="file-video" type="file" accept="video/*,.mp4,.mov,.m4v,.webm">
+      <label class="prompt" for="file-video" id="prompt-video">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10" width="30" height="28" rx="5"/><path d="M35 21l9-5v16l-9-5"/></svg>
+        <strong>Choose a video</strong>
+        <span>or drop it here (MP4, MOV, WebM)</span>
+      </label>
+      <div class="filled" id="filled-video" hidden>
+        <div class="filename"><span id="name-video"></span><small id="dur-video"></small></div>
+        <video id="player-video" muted playsinline controls preload="metadata"></video>
+        <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M22 9l-6 6M16 9l6 6"/></svg>Original sound removed</span>
+        <label class="replace" for="file-video">Choose a different video</label>
+      </div>
+      <p class="zone-error" id="err-video" role="alert" hidden></p>
+    </section>
+
+    <section class="zone" id="zone-audio" aria-labelledby="h-audio">
+      <h2 id="h-audio">New audio</h2>
+      <p class="hint">This becomes the video's sound.</p>
+      <input class="sr" id="file-audio" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac">
+      <label class="prompt" for="file-audio" id="prompt-audio">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 20v8M14 14v20M22 8v32M30 16v16M38 21v6"/></svg>
+        <strong>Choose an audio file</strong>
+        <span>or drop it here (MP3, WAV, M4A, AAC, OGG)</span>
+      </label>
+      <div class="filled" id="filled-audio" hidden>
+        <div class="filename"><span id="name-audio"></span><small id="dur-audio"></small></div>
+        <canvas id="wave" aria-hidden="true"></canvas>
+        <audio id="player-audio" controls preload="metadata"></audio>
+        <label class="replace" for="file-audio">Choose a different audio file</label>
+      </div>
+      <p class="zone-error" id="err-audio" role="alert" hidden></p>
+    </section>
+  </div>
+
+  <section class="timeline" id="timeline" hidden aria-labelledby="h-tl">
+    <h3 id="h-tl">How the lengths compare</h3>
+    <div class="row"><span>Video</span><div><div class="bar v" id="bar-v"></div></div><span class="t" id="t-v"></span></div>
+    <div class="row"><span>Audio</span><div><div class="bar a" id="bar-a"></div></div><span class="t" id="t-a"></span></div>
+    <p class="note" id="tl-note"></p>
+  </section>
+
+  <fieldset>
+    <legend>If the lengths don't match</legend>
+    <label class="opt"><input type="radio" name="mode" value="full" checked>
+      <span>Match the video length<small>Silence fills any gap. Audio that runs longer is cut off.</small></span></label>
+    <label class="opt"><input type="radio" name="mode" value="shorter">
+      <span>Stop at the shorter one<small>The result ends when either the video or the audio ends.</small></span></label>
+  </fieldset>
+
+  <div class="actions">
+    <button type="button" id="go" disabled>Create video</button>
+    <button type="button" id="fallback" class="secondary" hidden>Record in real time instead</button>
+  </div>
+  <p class="status" id="status" role="status" aria-live="polite">Add a video and an audio file to begin.</p>
+  <progress id="prog" max="1" value="0" hidden aria-label="Progress"></progress>
+
+  <section class="result" id="result" hidden aria-labelledby="h-res">
+    <h2 id="h-res">Your video is ready</h2>
+    <video id="out" controls playsinline></video>
+    <div class="actions"><a class="btn" id="download" href="#" download="video.mp4">Download video</a></div>
+  </section>
+
+  <p class="privacy">Your files stay on your device. The editing tool downloads once from a public CDN, then runs inside your browser. Very large videos may run out of memory, so files under about 500 MB work best.</p>
+</main>
+
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const state = { video: null, audio: null, vDur: NaN, aDur: NaN, peaks: null, ffmpeg: null, ffLoading: null, outUrl: null };
+
+  const fmt = (s) => { if (!isFinite(s)) return ''; const m = Math.floor(s / 60), r = Math.round(s % 60); return `${m}:${String(r).padStart(2, '0')}`; };
+  const setStatus = (msg, kind = '') => { const el = $('#status'); el.textContent = msg; el.className = 'status ' + kind; };
+  const setProgress = (v) => { const p = $('#prog'); if (v == null) { p.hidden = true; return; } p.hidden = false; p.value = Math.max(0, Math.min(1, v)); };
+  const zoneError = (kind, msg) => { const el = $('#err-' + kind); el.hidden = !msg; el.textContent = msg || ''; };
+  const extOf = (f, fallback) => ((f.name.split('.').pop() || fallback).toLowerCase().replace(/[^a-z0-9]/g, '')) || fallback;
+  const isVideo = (f) => f.type.startsWith('video/') || /\.(mp4|mov|m4v|webm)$/i.test(f.name);
+  const isAudio = (f) => f.type.startsWith('audio/') || /\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(f.name);
+
+  // ---------- picking files
+  function setFile(kind, file) {
+    zoneError(kind, '');
+    if (!file) return;
+    if (kind === 'video' ? !isVideo(file) : !isAudio(file)) {
+      zoneError(kind, kind === 'video' ? 'That doesn\'t look like a video. Try an MP4, MOV or WebM file.' : 'That doesn\'t look like audio. Try an MP3, WAV, M4A, AAC or OGG file.');
+      return;
+    }
+    state[kind] = file;
+    const url = URL.createObjectURL(file);
+    $('#name-' + kind).textContent = file.name;
+    $('#prompt-' + kind).hidden = true;
+    $('#filled-' + kind).hidden = false;
+    $('#zone-' + kind).classList.add('has-file');
+    const player = $('#player-' + kind);
+    player.src = url;
+    player.onloadedmetadata = () => {
+      state[kind === 'video' ? 'vDur' : 'aDur'] = player.duration;
+      $('#dur-' + kind).textContent = fmt(player.duration);
+      updateTimeline();
+    };
+    player.onerror = () => zoneError(kind, 'Your browser can\'t play this file. Try converting it to MP4 (video) or MP3 (audio).');
+    if (kind === 'audio') drawFor(file);
+    refresh();
+    getFFmpeg().catch(() => {}); // warm up in the background
+  }
+  for (const kind of ['video', 'audio']) {
+    const zone = $('#zone-' + kind);
+    $('#file-' + kind).addEventListener('change', (e) => { setFile(kind, e.target.files[0]); e.target.value = ''; });
+    zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('drag'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+    zone.addEventListener('drop', (e) => { e.preventDefault(); zone.classList.remove('drag'); setFile(kind, e.dataTransfer.files[0]); });
+  }
+  function refresh() {
+    $('#go').disabled = !(state.video && state.audio);
+    if (state.video && state.audio) setStatus('Ready. Press Create video.');
+    else if (state.video) setStatus('Now add the audio you want to use.');
+    else if (state.audio) setStatus('Now add the video.');
+  }
+
+  // ---------- timeline + waveform
+  function updateTimeline() {
+    const tl = $('#timeline');
+    if (!isFinite(state.vDur) || !isFinite(state.aDur)) { tl.hidden = true; return; }
+    tl.hidden = false;
+    const max = Math.max(state.vDur, state.aDur);
+    $('#bar-v').style.width = (state.vDur / max * 100) + '%';
+    $('#bar-a').style.width = (state.aDur / max * 100) + '%';
+    $('#t-v').textContent = fmt(state.vDur); $('#t-a').textContent = fmt(state.aDur);
+    const diff = state.aDur - state.vDur;
+    $('#tl-note').textContent = Math.abs(diff) < 0.5 ? 'The lengths match.'
+      : diff > 0 ? `The audio is ${fmt(diff)} longer than the video.` : `The video is ${fmt(-diff)} longer than the audio.`;
+  }
+  async function drawFor(file) {
+    state.peaks = null; drawWave();
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    const ctx = new AC();
+    try {
+      const buf = await ctx.decodeAudioData(await file.arrayBuffer());
+      const ch = buf.getChannelData(0), n = 160, step = Math.max(1, Math.floor(ch.length / n)), skip = Math.max(1, Math.floor(step / 64));
+      const peaks = [];
+      for (let i = 0; i < n; i++) { let m = 0; for (let j = i * step; j < (i + 1) * step && j < ch.length; j += skip) m = Math.max(m, Math.abs(ch[j])); peaks.push(m); }
+      const top = Math.max(...peaks) || 1;
+      state.peaks = peaks.map((p) => p / top);
+      drawWave();
+    } catch (e) { /* waveform is optional */ } finally { ctx.close(); }
+  }
+  function drawWave() {
+    const c = $('#wave'); if (!c || c.offsetParent === null) return;
+    const dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+    c.width = w * dpr; c.height = h * dpr;
+    const g = c.getContext('2d'); g.scale(dpr, dpr); g.clearRect(0, 0, w, h);
+    g.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--wave').trim();
+    const peaks = state.peaks || new Array(160).fill(0.06), bw = w / peaks.length;
+    peaks.forEach((p, i) => { const bh = Math.max(2, p * h); g.fillRect(i * bw + 0.5, (h - bh) / 2, Math.max(1, bw - 1.5), bh); });
+  }
+  addEventListener('resize', drawWave);
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', drawWave);
+
+  // ---------- ffmpeg.wasm (single-thread build, works on GitHub Pages)
+  const CDNS = ['https://cdn.jsdelivr.net/npm', 'https://unpkg.com'];
+  const loadScript = (src) => new Promise((res, rej) => {
+    const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('Could not load ' + src)); document.head.appendChild(s);
+  });
+  function getFFmpeg() {
+    if (state.ffmpeg) return Promise.resolve(state.ffmpeg);
+    if (state.ffLoading) return state.ffLoading;
+    state.ffLoading = (async () => {
+      let last;
+      for (const cdn of CDNS) {
+        try {
+          if (!window.FFmpegWASM) await loadScript(`${cdn}/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js`);
+          if (!window.FFmpegUtil) await loadScript(`${cdn}/@ffmpeg/util@0.12.1/dist/umd/index.js`);
+          const { FFmpeg } = window.FFmpegWASM, { toBlobURL } = window.FFmpegUtil;
+          const ff = new FFmpeg();
+          ff.on('progress', ({ progress }) => { if (state.busy && progress >= 0 && progress <= 1) setProgress(0.2 + progress * 0.7); });
+          await ff.load({
+            classWorkerURL: await toBlobURL(`${cdn}/@ffmpeg/ffmpeg@0.12.10/dist/umd/814.ffmpeg.js`, 'text/javascript'),
+            coreURL: await toBlobURL(`${cdn}/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js`, 'text/javascript'),
+            wasmURL: await toBlobURL(`${cdn}/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm`, 'application/wasm'),
+          });
+          state.ffmpeg = ff; return ff;
+        } catch (e) { last = e; }
+      }
+      state.ffLoading = null; throw last;
+    })();
+    return state.ffLoading;
+  }
+
+  // ---------- create
+  const mode = () => document.querySelector('input[name=mode]:checked').value;
+  const outName = () => state.video.name.replace(/\.[^.]+$/, '') + '-new-audio';
+  function showResult(blob, ext) {
+    if (state.outUrl) URL.revokeObjectURL(state.outUrl);
+    state.outUrl = URL.createObjectURL(blob);
+    $('#out').src = state.outUrl;
+    const a = $('#download'); a.href = state.outUrl; a.download = outName() + '.' + ext;
+    $('#result').hidden = false;
+    $('#result').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+  }
+  function busy(on) { state.busy = on; $('#go').disabled = on || !(state.video && state.audio); $('#fallback').disabled = on; }
+
+  async function create() {
+    busy(true); $('#result').hidden = true; $('#fallback').hidden = true; setProgress(0.02);
+    try {
+      setStatus('Loading the editing tool. This only happens once.');
+      const ff = await getFFmpeg();
+      setProgress(0.1); setStatus('Reading your files.');
+      const vExt = extOf(state.video, 'mp4'), aExt = extOf(state.audio, 'mp3');
+      const vIn = 'in_video.' + vExt, aIn = 'in_audio.' + aExt;
+      await ff.writeFile(vIn, new Uint8Array(await state.video.arrayBuffer()));
+      await ff.writeFile(aIn, new Uint8Array(await state.audio.arrayBuffer()));
+      setProgress(0.2); setStatus('Replacing the sound.');
+      const len = mode() === 'shorter' ? Math.min(state.vDur, state.aDur) : state.vDur;
+      const base = ['-i', vIn, '-i', aIn, '-map', '0:v:0', '-map', '1:a:0'];
+      const tail = ['-c:a', 'aac', '-b:a', '192k'];
+      if (mode() === 'full') tail.push('-af', 'apad');
+      tail.push(...(isFinite(len) ? ['-t', len.toFixed(3)] : ['-shortest']), '-movflags', '+faststart', 'output.mp4');
+      let code = await ff.exec([...base, '-c:v', 'copy', ...tail]);
+      if (code !== 0) {
+        setStatus('Re-encoding the video so it fits an MP4. This takes longer.');
+        try { await ff.deleteFile('output.mp4'); } catch (e) {}
+        code = await ff.exec([...base, '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-pix_fmt', 'yuv420p', ...tail]);
+      }
+      if (code !== 0) throw new Error('The editing tool could not process these files.');
+      const data = await ff.readFile('output.mp4');
+      for (const f of [vIn, aIn, 'output.mp4']) { try { await ff.deleteFile(f); } catch (e) {} }
+      showResult(new Blob([data.buffer], { type: 'video/mp4' }), 'mp4');
+      setProgress(null); setStatus('Done. Your video has the new sound.', 'ok');
+    } catch (e) {
+      console.error(e); setProgress(null);
+      setStatus((state.ffmpeg ? 'Something went wrong: ' : 'The editing tool could not load. Check your internet connection and try again. ') + (e && e.message ? e.message : ''), 'err');
+      if (window.MediaRecorder) $('#fallback').hidden = false;
+    } finally { busy(false); }
+  }
+  $('#go').addEventListener('click', create);
+
+  // ---------- fallback: record in real time (no downloads needed, but takes as long as the video)
+  async function recordInstead() {
+    busy(true); $('#fallback').hidden = true; $('#result').hidden = true;
+    const url = URL.createObjectURL(state.video);
+    const v = document.createElement('video'); v.src = url; v.muted = true; v.playsInline = true;
+    const AC = window.AudioContext || window.webkitAudioContext; const ctx = new AC();
+    try {
+      setStatus('Preparing. Keep this tab open and in front while it records.');
+      await new Promise((res, rej) => { v.onloadedmetadata = res; v.onerror = () => rej(new Error('The video could not be read.')); });
+      const buf = await ctx.decodeAudioData(await state.audio.arrayBuffer());
+      const dest = ctx.createMediaStreamDestination(), src = ctx.createBufferSource(); src.buffer = buf; src.connect(dest);
+      const cap = (v.captureStream || v.mozCaptureStream); if (!cap) throw new Error('This browser can\'t record video. Try Chrome, Edge or Firefox.');
+      const stream = new MediaStream([...cap.call(v).getVideoTracks(), ...dest.stream.getAudioTracks()]);
+      const mime = ['video/mp4;codecs=avc1,mp4a.40.2', 'video/webm;codecs=vp9,opus', 'video/webm'].find((m) => MediaRecorder.isTypeSupported(m));
+      const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined), chunks = [];
+      rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+      const stopped = new Promise((r) => (rec.onstop = r));
+      const total = mode() === 'shorter' ? Math.min(state.vDur, state.aDur) : state.vDur;
+      let finished = false; const finish = () => { if (finished) return; finished = true; v.pause(); try { src.stop(); } catch (e) {} rec.stop(); };
+      rec.start(); await ctx.resume(); await v.play(); src.start();
+      v.onended = finish; setTimeout(finish, total * 1000 + 300);
+      const tick = setInterval(() => { setProgress(v.currentTime / total); setStatus(`Recording in real time: ${fmt(v.currentTime)} of ${fmt(total)}. Keep this tab open.`); if (finished) clearInterval(tick); }, 400);
+      await stopped; clearInterval(tick);
+      const type = (rec.mimeType || 'video/webm').split(';')[0];
+      showResult(new Blob(chunks, { type }), type.includes('mp4') ? 'mp4' : 'webm');
+      setProgress(null); setStatus('Done. Your video has the new sound.', 'ok');
+    } catch (e) {
+      console.error(e); setProgress(null); setStatus('Recording failed: ' + (e.message || e), 'err');
+    } finally { ctx.close(); URL.revokeObjectURL(url); busy(false); }
+  }
+  $('#fallback').addEventListener('click', recordInstead);
+})();
+</script>
+</body>
+</html>
