@@ -90,7 +90,7 @@ button, .btn {
 button:disabled { opacity: .4; cursor: not-allowed; }
 button.secondary { background: transparent; color: var(--ink); border: 2px solid var(--line); }
 button:focus-visible, .btn:focus-visible, .replace:focus-visible { outline: 3px solid var(--video); outline-offset: 3px; }
-.status { margin: 1rem 0 0; min-height: 1.5rem; color: var(--muted); }
+.status { margin: 1rem 0 0; min-height: 1.5rem; color: var(--muted); overflow-wrap: anywhere; }
 .status.err { color: var(--danger); } .status.ok { color: var(--ok); }
 progress { width: 100%; height: 10px; margin-top: .6rem; accent-color: var(--video); }
 progress[hidden] { display: none; }
@@ -291,31 +291,43 @@ progress[hidden] { display: none; }
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', drawWave);
 
   // ---------- ffmpeg.wasm (single-thread build, works on GitHub Pages)
-  const CDNS = ['https://cdn.jsdelivr.net/npm', 'https://unpkg.com'];
+  const CDNS = [['jsDelivr', 'https://cdn.jsdelivr.net/npm'], ['unpkg', 'https://unpkg.com']];
+  const errText = (e) => String((e && e.message) || e || 'unknown error').replace(/\s+/g, ' ').slice(0, 160);
   const loadScript = (src) => new Promise((res, rej) => {
-    const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('Could not load ' + src)); document.head.appendChild(s);
+    const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('could not download ' + src.split('/').slice(2, 5).join('/'))); document.head.appendChild(s);
   });
+  const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timed out after ' + ms / 1000 + 's')), ms))]);
   function getFFmpeg() {
     if (state.ffmpeg) return Promise.resolve(state.ffmpeg);
     if (state.ffLoading) return state.ffLoading;
     state.ffLoading = (async () => {
-      let last;
-      for (const cdn of CDNS) {
+      const problems = [];
+      for (const [cdnName, cdn] of CDNS) {
         try {
           if (!window.FFmpegWASM) await loadScript(`${cdn}/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js`);
           if (!window.FFmpegUtil) await loadScript(`${cdn}/@ffmpeg/util@0.12.1/dist/umd/index.js`);
-          const { FFmpeg } = window.FFmpegWASM, { toBlobURL } = window.FFmpegUtil;
-          const ff = new FFmpeg();
-          ff.on('progress', ({ progress }) => { if (state.busy && progress >= 0 && progress <= 1) setProgress(0.2 + progress * 0.7); });
-          await ff.load({
-            classWorkerURL: await toBlobURL(`${cdn}/@ffmpeg/ffmpeg@0.12.10/dist/umd/814.ffmpeg.js`, 'text/javascript'),
-            coreURL: await toBlobURL(`${cdn}/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js`, 'text/javascript'),
-            wasmURL: await toBlobURL(`${cdn}/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm`, 'application/wasm'),
-          });
-          state.ffmpeg = ff; return ff;
-        } catch (e) { last = e; }
+        } catch (e) { problems.push(`${cdnName}: ${errText(e)}`); continue; }
+        // The tool comes in two flavours; if one fails to start in this browser, the other often works.
+        for (const flavor of ['umd', 'esm']) {
+          const ff = new window.FFmpegWASM.FFmpeg();
+          try {
+            const { toBlobURL } = window.FFmpegUtil;
+            ff.on('progress', ({ progress }) => { if (state.busy && progress >= 0 && progress <= 1) setProgress(0.2 + progress * 0.7); });
+            await withTimeout(ff.load({
+              classWorkerURL: await toBlobURL(`${cdn}/@ffmpeg/ffmpeg@0.12.10/dist/umd/814.ffmpeg.js`, 'text/javascript'),
+              coreURL: await toBlobURL(`${cdn}/@ffmpeg/core@0.12.6/dist/${flavor}/ffmpeg-core.js`, 'text/javascript'),
+              wasmURL: await toBlobURL(`${cdn}/@ffmpeg/core@0.12.6/dist/${flavor}/ffmpeg-core.wasm`, 'application/wasm'),
+            }), 120000);
+            state.ffmpeg = ff; return ff;
+          } catch (e) {
+            problems.push(`${cdnName} ${flavor}: ${errText(e)}`);
+            try { ff.terminate(); } catch (x) {}
+          }
+        }
       }
-      state.ffLoading = null; throw last;
+      state.ffLoading = null;
+      const hint = location.protocol === 'file:' ? ' You opened this page from your computer. Open it from your GitHub Pages address instead.' : '';
+      throw new Error('Details: ' + problems.join(' | ') + '.' + hint);
     })();
     return state.ffLoading;
   }
@@ -393,7 +405,7 @@ progress[hidden] { display: none; }
       setProgress(null); setStatus('Done. Your video has the new sound.', 'ok');
     } catch (e) {
       console.error(e); setProgress(null);
-      setStatus((state.ffmpeg ? 'Something went wrong: ' : 'The editing tool could not load. Check your internet connection and try again. ') + (e && e.message ? e.message : ''), 'err');
+      setStatus((state.ffmpeg ? 'Something went wrong: ' : 'The editing tool could not load. ') + String((e && e.message) || e), 'err');
       if (window.MediaRecorder) $('#fallback').hidden = false;
     } finally { busy(false); }
   }
@@ -441,7 +453,7 @@ progress[hidden] { display: none; }
       showResult(new Blob(chunks, { type }), type.includes('mp4') ? 'mp4' : 'webm');
       setProgress(null); setStatus('Done. Your video has the new sound.', 'ok');
     } catch (e) {
-      console.error(e); setProgress(null); setStatus('Recording failed: ' + (e.message || e), 'err');
+      console.error(e); setProgress(null); setStatus('Recording failed: ' + String((e && e.message) || e), 'err');
     } finally { ctx.close(); URL.revokeObjectURL(url); busy(false); }
   }
   $('#fallback').addEventListener('click', recordInstead);
