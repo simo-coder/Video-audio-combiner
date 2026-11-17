@@ -155,6 +155,24 @@ progress[hidden] { display: none; }
   </section>
 
   <fieldset>
+    <legend>Shape of the finished video</legend>
+    <label class="opt"><input type="radio" name="shape" value="keep" checked>
+      <span>Keep the original shape<small>The video is not resized.</small></span></label>
+    <label class="opt"><input type="radio" name="shape" value="portrait">
+      <span>Portrait<small>Tall, 9:16, for TikTok, Reels and Shorts.</small></span></label>
+    <label class="opt"><input type="radio" name="shape" value="landscape">
+      <span>Landscape<small>Wide, 16:9, for YouTube and computer screens.</small></span></label>
+    <div id="fit-group" hidden>
+      <p class="note" id="shape-note"></p>
+      <label class="opt"><input type="radio" name="fit" value="bars" checked>
+        <span>Fit the whole picture<small>Black bars fill the empty space.</small></span></label>
+      <label class="opt"><input type="radio" name="fit" value="crop">
+        <span>Fill the frame<small>Crops the edges so there are no bars.</small></span></label>
+    </div>
+    <p class="note" id="shape-info" hidden></p>
+  </fieldset>
+
+  <fieldset>
     <legend>If the lengths don't match</legend>
     <label class="opt"><input type="radio" name="mode" value="full" checked>
       <span>Match the video length<small>Silence fills any gap. Audio that runs longer is cut off.</small></span></label>
@@ -181,7 +199,7 @@ progress[hidden] { display: none; }
 <script>
 (() => {
   const $ = (s) => document.querySelector(s);
-  const state = { video: null, audio: null, vDur: NaN, aDur: NaN, peaks: null, ffmpeg: null, ffLoading: null, outUrl: null };
+  const state = { video: null, audio: null, vDur: NaN, aDur: NaN, vW: 0, vH: 0, peaks: null, ffmpeg: null, ffLoading: null, outUrl: null };
 
   const fmt = (s) => { if (!isFinite(s)) return ''; const m = Math.floor(s / 60), r = Math.round(s % 60); return `${m}:${String(r).padStart(2, '0')}`; };
   const setStatus = (msg, kind = '') => { const el = $('#status'); el.textContent = msg; el.className = 'status ' + kind; };
@@ -209,6 +227,7 @@ progress[hidden] { display: none; }
     player.src = url;
     player.onloadedmetadata = () => {
       state[kind === 'video' ? 'vDur' : 'aDur'] = player.duration;
+      if (kind === 'video') { state.vW = player.videoWidth; state.vH = player.videoHeight; updateShape(); }
       $('#dur-' + kind).textContent = fmt(player.duration);
       updateTimeline();
     };
@@ -301,6 +320,29 @@ progress[hidden] { display: none; }
     return state.ffLoading;
   }
 
+  // ---------- shape (portrait / landscape)
+  const shape = () => document.querySelector('input[name=shape]:checked').value;
+  const fit = () => document.querySelector('input[name=fit]:checked').value;
+  // Returns the output size when the video must be resized, or null when it can stay as it is.
+  function target() {
+    const s = shape();
+    if (s === 'keep' || !state.vW || !state.vH) return null;
+    const srcPortrait = state.vH > state.vW;
+    if ((s === 'portrait' && srcPortrait) || (s === 'landscape' && !srcPortrait)) return null;
+    return s === 'portrait' ? { w: 720, h: 1280 } : { w: 1280, h: 720 };
+  }
+  function updateShape() {
+    const t = target(), info = $('#shape-info'), s = shape();
+    $('#fit-group').hidden = !t;
+    info.hidden = !(s !== 'keep' && state.vW && !t);
+    if (!info.hidden) info.textContent = `Your video is already ${s}, so it stays as it is.`;
+    if (t) $('#shape-note').textContent = `Your video will be resized to ${t.w} x ${t.h}. This re-encodes it, so it takes longer.`;
+  }
+  document.querySelectorAll('input[name=shape]').forEach((r) => r.addEventListener('change', updateShape));
+  const filterFor = (t) => fit() === 'crop'
+    ? `scale=${t.w}:${t.h}:force_original_aspect_ratio=increase,crop=${t.w}:${t.h},setsar=1`
+    : `scale=${t.w}:${t.h}:force_original_aspect_ratio=decrease,pad=${t.w}:${t.h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1`;
+
   // ---------- create
   const mode = () => document.querySelector('input[name=mode]:checked').value;
   const outName = () => state.video.name.replace(/\.[^.]+$/, '') + '-new-audio';
@@ -330,11 +372,19 @@ progress[hidden] { display: none; }
       const tail = ['-c:a', 'aac', '-b:a', '192k'];
       if (mode() === 'full') tail.push('-af', 'apad');
       tail.push(...(isFinite(len) ? ['-t', len.toFixed(3)] : ['-shortest']), '-movflags', '+faststart', 'output.mp4');
-      let code = await ff.exec([...base, '-c:v', 'copy', ...tail]);
-      if (code !== 0) {
-        setStatus('Re-encoding the video so it fits an MP4. This takes longer.');
-        try { await ff.deleteFile('output.mp4'); } catch (e) {}
-        code = await ff.exec([...base, '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-pix_fmt', 'yuv420p', ...tail]);
+      const enc = ['-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-pix_fmt', 'yuv420p'];
+      const t = target();
+      let code;
+      if (t) {
+        setStatus(`Resizing to ${t.w} x ${t.h} and replacing the sound. This takes longer.`);
+        code = await ff.exec([...base, '-vf', filterFor(t), ...enc, ...tail]);
+      } else {
+        code = await ff.exec([...base, '-c:v', 'copy', ...tail]);
+        if (code !== 0) {
+          setStatus('Re-encoding the video so it fits an MP4. This takes longer.');
+          try { await ff.deleteFile('output.mp4'); } catch (e) {}
+          code = await ff.exec([...base, ...enc, ...tail]);
+        }
       }
       if (code !== 0) throw new Error('The editing tool could not process these files.');
       const data = await ff.readFile('output.mp4');
@@ -360,15 +410,30 @@ progress[hidden] { display: none; }
       await new Promise((res, rej) => { v.onloadedmetadata = res; v.onerror = () => rej(new Error('The video could not be read.')); });
       const buf = await ctx.decodeAudioData(await state.audio.arrayBuffer());
       const dest = ctx.createMediaStreamDestination(), src = ctx.createBufferSource(); src.buffer = buf; src.connect(dest);
-      const cap = (v.captureStream || v.mozCaptureStream); if (!cap) throw new Error('This browser can\'t record video. Try Chrome, Edge or Firefox.');
-      const stream = new MediaStream([...cap.call(v).getVideoTracks(), ...dest.stream.getAudioTracks()]);
+      const t = target(); let drawLoop = null, vTracks;
+      if (t) {
+        const c = document.createElement('canvas'); c.width = t.w; c.height = t.h; const g = c.getContext('2d');
+        drawLoop = () => {
+          if (finished) return;
+          const vw = v.videoWidth, vh = v.videoHeight;
+          const k = fit() === 'crop' ? Math.max(t.w / vw, t.h / vh) : Math.min(t.w / vw, t.h / vh), dw = vw * k, dh = vh * k;
+          g.fillStyle = '#000'; g.fillRect(0, 0, t.w, t.h); g.drawImage(v, (t.w - dw) / 2, (t.h - dh) / 2, dw, dh);
+          requestAnimationFrame(drawLoop);
+        };
+        vTracks = c.captureStream(30).getVideoTracks();
+      } else {
+        const cap = (v.captureStream || v.mozCaptureStream); if (!cap) throw new Error('This browser can\'t record video. Try Chrome, Edge or Firefox.');
+        vTracks = cap.call(v).getVideoTracks();
+      }
+      const stream = new MediaStream([...vTracks, ...dest.stream.getAudioTracks()]);
       const mime = ['video/mp4;codecs=avc1,mp4a.40.2', 'video/webm;codecs=vp9,opus', 'video/webm'].find((m) => MediaRecorder.isTypeSupported(m));
+      let finished = false;
       const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined), chunks = [];
       rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
       const stopped = new Promise((r) => (rec.onstop = r));
       const total = mode() === 'shorter' ? Math.min(state.vDur, state.aDur) : state.vDur;
-      let finished = false; const finish = () => { if (finished) return; finished = true; v.pause(); try { src.stop(); } catch (e) {} rec.stop(); };
-      rec.start(); await ctx.resume(); await v.play(); src.start();
+      const finish = () => { if (finished) return; finished = true; v.pause(); try { src.stop(); } catch (e) {} rec.stop(); };
+      rec.start(); await ctx.resume(); await v.play(); src.start(); if (drawLoop) drawLoop();
       v.onended = finish; setTimeout(finish, total * 1000 + 300);
       const tick = setInterval(() => { setProgress(v.currentTime / total); setStatus(`Recording in real time: ${fmt(v.currentTime)} of ${fmt(total)}. Keep this tab open.`); if (finished) clearInterval(tick); }, 400);
       await stopped; clearInterval(tick);
