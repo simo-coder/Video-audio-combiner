@@ -1,523 +1,339 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Swap the sound on a video</title>
-<meta name="description" content="Replace a video's original sound with your own audio file. Runs entirely in your browser.">
+<title>Story Video Control Center</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
-:root {
-  --paper: #eceff5; --panel: #ffffff; --ink: #101a33; --muted: #566280; --line: #c9d1e2;
-  --video: #2748f0; --wave: #e08a00; --danger: #b42318; --ok: #0b7a4b; --btn-text: #ffffff;
-  color-scheme: light;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #0c1222; --panel: #151e36; --ink: #e8ecf7; --muted: #94a1c2; --line: #2a3556;
-    --video: #8aa0ff; --wave: #ffb84d; --danger: #ff8a7a; --ok: #5fd6a0; --btn-text: #0c1222;
-    color-scheme: dark;
-  }
-}
-* { box-sizing: border-box; }
-[hidden] { display: none !important; }
-html { background: var(--paper); }
-body {
-  margin: 0; color: var(--ink); background: var(--paper);
-  font-family: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  font-size: 1rem; line-height: 1.5;
-}
-main { max-width: 760px; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
-h1 { font-size: clamp(2rem, 6vw, 3.1rem); line-height: 1.05; letter-spacing: -0.03em; font-weight: 800; margin: 0 0 .75rem; }
-.lede { color: var(--muted); max-width: 46ch; margin: 0 0 2rem; font-size: 1.075rem; }
-.pair { display: grid; grid-template-columns: 1fr; gap: 1rem; }
-@media (min-width: 680px) { .pair { grid-template-columns: 1fr 1fr; } }
-
-.zone {
-  position: relative; background: var(--panel); border: 2px dashed var(--line); border-radius: 18px;
-  min-height: 15rem; padding: 1.1rem; display: flex; flex-direction: column;
-  transition: border-color .15s, background-color .15s;
-}
-.zone.has-file { border-style: solid; }
-.zone.drag { border-color: var(--video); }
-.zone:has(input:focus-visible) { outline: 3px solid var(--video); outline-offset: 3px; }
-.zone h2 { font-size: 1.05rem; margin: 0; font-weight: 700; }
-.zone .hint { color: var(--muted); font-size: .92rem; margin: .15rem 0 0; }
-.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.prompt {
-  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
-  gap: .35rem; cursor: pointer; padding: 1rem 0 .5rem; color: var(--muted);
-}
-.prompt svg { width: 44px; height: 44px; color: var(--ink); margin-bottom: .25rem; }
-.prompt strong { color: var(--ink); font-size: 1.05rem; }
-.prompt span { font-size: .9rem; }
-.filled { display: flex; flex-direction: column; gap: .7rem; margin-top: .75rem; flex: 1; }
-.filled[hidden], .prompt[hidden] { display: none; }
-.filename { font-weight: 500; font-size: .95rem; overflow-wrap: anywhere; display: flex; justify-content: space-between; gap: .75rem; align-items: baseline; }
-.filename small { color: var(--muted); white-space: nowrap; font-size: .88rem; }
-video, audio { width: 100%; border-radius: 12px; background: #000; display: block; }
-audio { background: transparent; height: 40px; }
-video { max-height: 15rem; }
-canvas { width: 100%; height: 64px; display: block; }
-.chip { display: inline-flex; align-items: center; gap: .4rem; font-size: .85rem; color: var(--muted); }
-.chip svg { width: 18px; height: 18px; color: var(--danger); flex: none; }
-.replace { align-self: flex-start; font-size: .9rem; color: var(--video); font-weight: 500; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
-.zone-error { color: var(--danger); font-size: .9rem; margin: .5rem 0 0; }
-
-.timeline { margin-top: 1.5rem; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 1rem 1.1rem; }
-.timeline[hidden] { display: none; }
-.timeline h3 { margin: 0 0 .7rem; font-size: .98rem; font-weight: 700; }
-.row { display: grid; grid-template-columns: 4.5rem 1fr 3.2rem; align-items: center; gap: .7rem; font-size: .9rem; }
-.row + .row { margin-top: .5rem; }
-.row .bar { height: 12px; border-radius: 6px; transition: width .3s; }
-.row .t { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
-.bar.v { background: var(--video); } .bar.a { background: var(--wave); }
-.note { margin: .7rem 0 0; font-size: .9rem; color: var(--muted); }
-
-fieldset { border: 0; padding: 0; margin: 1.5rem 0 0; }
-legend { font-weight: 700; padding: 0; margin-bottom: .5rem; }
-.opt { display: flex; gap: .6rem; align-items: flex-start; padding: .35rem 0; cursor: pointer; }
-.opt input { margin-top: .3rem; accent-color: var(--video); width: 1.05rem; height: 1.05rem; flex: none; }
-.opt small { display: block; color: var(--muted); }
-
-.actions { margin-top: 1.5rem; display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; }
-button, .btn {
-  font: inherit; font-weight: 700; border: 0; border-radius: 12px; padding: .85rem 1.5rem; cursor: pointer;
-  background: var(--ink); color: var(--paper); text-decoration: none; display: inline-block;
-}
-button:disabled { opacity: .4; cursor: not-allowed; }
-button.secondary { background: transparent; color: var(--ink); border: 2px solid var(--line); }
-button:focus-visible, .btn:focus-visible, .replace:focus-visible { outline: 3px solid var(--video); outline-offset: 3px; }
-.status { margin: 1rem 0 0; min-height: 1.5rem; color: var(--muted); overflow-wrap: anywhere; }
-.status.err { color: var(--danger); } .status.ok { color: var(--ok); }
-progress { width: 100%; height: 10px; margin-top: .6rem; accent-color: var(--video); }
-progress[hidden] { display: none; }
-
-.result { margin-top: 2rem; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 1.1rem; }
-.result[hidden] { display: none; }
-.result h2 { margin: 0 0 .75rem; font-size: 1.2rem; }
-.result video { max-height: 28rem; margin: 0 auto; }
-.result .actions { margin-top: 1rem; }
-.margin-row { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 1.25rem; }
-.margin-row input[type=range] { flex: 1 1 12rem; min-width: 10rem; accent-color: var(--video); }
-.num { display: inline-flex; align-items: center; gap: .4rem; font-weight: 500; }
-.num input, .screen input { font: inherit; width: 4.5rem; padding: .4rem .5rem; border: 2px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); }
-.num input:focus-visible, .screen input:focus-visible, input[type=range]:focus-visible { outline: 3px solid var(--video); outline-offset: 2px; }
-.pv { position: relative; height: 120px; background: #000; border: 2px solid var(--line); border-radius: 8px; flex: none; }
-.pv i { position: absolute; background: var(--video); border-radius: 2px; }
-.screen { margin-top: .75rem; font-size: .92rem; }
-.screen summary { cursor: pointer; color: var(--muted); }
-.screen label { display: flex; align-items: center; gap: .5rem; margin-top: .5rem; }
-.screen small { display: block; color: var(--muted); margin-top: .35rem; max-width: 52ch; }
-.privacy { margin-top: 2.5rem; color: var(--muted); font-size: .88rem; max-width: 60ch; }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+:root{--paper:#E8EDF1;--panel:#F7F9FA;--ink:#13222C;--mute:#5A6B77;--accent:#0F6B8C;--signal:#F2B134;--line:#C5D0D8;--bad:#B3261E}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.5 "Familjen Grotesk",system-ui,sans-serif}
+header{padding:20px 28px;border-bottom:2px solid var(--ink);display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+h1{margin:0;font-size:26px;letter-spacing:-.02em}
+header span{color:var(--mute);font-size:14px}
+main{display:grid;grid-template-columns:minmax(320px,440px) 1fr;min-height:calc(100vh - 72px)}
+@media(max-width:860px){main{grid-template-columns:1fr}}
+aside{background:var(--panel);border-right:1px solid var(--line);padding:0 24px 40px}
+section{padding:22px 0;border-bottom:1px solid var(--line)}
+h2{margin:0 0 4px;font-size:18px}
+p.hint{margin:0 0 12px;color:var(--mute);font-size:14px}
+textarea,input,select{width:100%;font:inherit;color:inherit;background:#fff;border:1px solid var(--line);border-radius:4px;padding:8px 10px}
+textarea{min-height:96px;resize:vertical}
+label{display:block;font-size:14px;color:var(--mute);margin:10px 0 3px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+button{font:inherit;font-weight:600;cursor:pointer;border-radius:4px;border:1px solid var(--ink);background:#fff;color:var(--ink);padding:8px 14px}
+button.go{background:var(--accent);border-color:var(--accent);color:#fff;width:100%;padding:13px;font-size:17px}
+button:disabled{opacity:.5;cursor:wait}
+button.link{border:0;background:none;color:var(--bad);padding:0 4px;font-weight:600}
+:focus-visible{outline:3px solid var(--signal);outline-offset:2px}
+ul{list-style:none;margin:10px 0 0;padding:0}
+li{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px dashed var(--line);font-size:14px;gap:8px}
+li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stage{padding:28px;display:flex;gap:28px;flex-wrap:wrap;align-content:flex-start}
+canvas{width:270px;height:480px;background:#0b141a;border-radius:6px;box-shadow:0 0 0 2px var(--ink)}
+.out{flex:1;min-width:260px}
+pre{background:#0b141a;color:#cfe3ee;font:13px/1.5 ui-monospace,Menlo,monospace;padding:12px;border-radius:4px;height:200px;overflow:auto;margin:0;white-space:pre-wrap}
+progress{width:100%;height:8px;margin:10px 0 0;accent-color:var(--accent)}
+.vid{margin-top:20px;display:flex;gap:14px;align-items:flex-end}
+.vid video{width:150px;border-radius:4px;background:#000}
+.vid a{font-weight:600;color:var(--accent)}
+.vid small{display:block;color:var(--mute);max-width:260px}
 </style>
 </head>
 <body>
+<header><h1>Story video control center</h1><span>Everything runs in your browser. Nothing is uploaded. Version 12</span></header>
 <main>
-  <h1>Swap the sound on a video</h1>
-  <p class="lede">Add a video and an audio file. The video's original sound is removed and your audio plays in its place.</p>
-
-  <div class="pair">
-    <section class="zone" id="zone-video" aria-labelledby="h-video">
-      <h2 id="h-video">Video</h2>
-      <p class="hint">Its original sound will be removed.</p>
-      <input class="sr" id="file-video" type="file" accept="video/*,.mp4,.mov,.m4v,.webm">
-      <label class="prompt" for="file-video" id="prompt-video">
-        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10" width="30" height="28" rx="5"/><path d="M35 21l9-5v16l-9-5"/></svg>
-        <strong>Choose a video</strong>
-        <span>or drop it here (MP4, MOV, WebM)</span>
-      </label>
-      <div class="filled" id="filled-video" hidden>
-        <div class="filename"><span id="name-video"></span><small id="dur-video"></small></div>
-        <video id="player-video" muted playsinline controls preload="metadata"></video>
-        <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M22 9l-6 6M16 9l6 6"/></svg>Original sound removed</span>
-        <label class="replace" for="file-video">Choose a different video</label>
-      </div>
-      <p class="zone-error" id="err-video" role="alert" hidden></p>
-    </section>
-
-    <section class="zone" id="zone-audio" aria-labelledby="h-audio">
-      <h2 id="h-audio">New audio</h2>
-      <p class="hint">This becomes the video's sound.</p>
-      <input class="sr" id="file-audio" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac">
-      <label class="prompt" for="file-audio" id="prompt-audio">
-        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 20v8M14 14v20M22 8v32M30 16v16M38 21v6"/></svg>
-        <strong>Choose an audio file</strong>
-        <span>or drop it here (MP3, WAV, M4A, AAC, OGG)</span>
-      </label>
-      <div class="filled" id="filled-audio" hidden>
-        <div class="filename"><span id="name-audio"></span><small id="dur-audio"></small></div>
-        <canvas id="wave" aria-hidden="true"></canvas>
-        <audio id="player-audio" controls preload="metadata"></audio>
-        <label class="replace" for="file-audio">Choose a different audio file</label>
-      </div>
-      <p class="zone-error" id="err-audio" role="alert" hidden></p>
-    </section>
-  </div>
-
-  <section class="timeline" id="timeline" hidden aria-labelledby="h-tl">
-    <h3 id="h-tl">How the lengths compare</h3>
-    <div class="row"><span>Video</span><div><div class="bar v" id="bar-v"></div></div><span class="t" id="t-v"></span></div>
-    <div class="row"><span>Audio</span><div><div class="bar a" id="bar-a"></div></div><span class="t" id="t-a"></span></div>
-    <p class="note" id="tl-note"></p>
+<aside>
+  <section>
+    <h2>Stories</h2>
+    <p class="hint">Paste your stories here. Put a line with only <code>---</code> between them. The first line of each story is its title. Each story becomes one video and is never reused.</p>
+    <textarea id="stories" style="min-height:180px" placeholder="My worst day at work&#10;So this happened last week...&#10;---&#10;Another title&#10;Another story..."></textarea>
   </section>
-
-  <fieldset>
-    <legend>Shape of the finished video</legend>
-    <label class="opt"><input type="radio" name="shape" value="keep" checked>
-      <span>Keep the original shape<small>The video is not resized.</small></span></label>
-    <label class="opt"><input type="radio" name="shape" value="portrait">
-      <span>Portrait<small>Tall, 9:16, for TikTok, Reels and Shorts.</small></span></label>
-    <label class="opt"><input type="radio" name="shape" value="landscape">
-      <span>Landscape<small>Wide, 16:9, for YouTube and computer screens.</small></span></label>
-    <div id="fit-group" hidden>
-      <label class="opt"><input type="radio" name="fit" value="bars" checked>
-        <span>Fit the whole picture<small>Black bars fill the empty space.</small></span></label>
-      <label class="opt"><input type="radio" name="fit" value="crop">
-        <span>Fill the frame<small>Crops the edges so there are no bars.</small></span></label>
-    </div>
-    <p class="note" id="shape-info" hidden></p>
-  </fieldset>
-
-  <fieldset>
-    <legend>Border around the picture</legend>
-    <p class="note" style="margin-top:0">A thin black border keeps phone buttons and rounded screen corners from covering the edges of the video.</p>
-    <div class="margin-row">
-      <input type="range" id="margin-range" min="0" max="1.5" step="0.1" value="0.3" aria-label="Border size in centimetres">
-      <label class="num"><input type="number" id="margin-num" min="0" max="1.5" step="0.1" value="0.3" aria-label="Border size in centimetres"> cm</label>
-      <div class="pv" id="pv" aria-hidden="true"><i id="pv-in"></i></div>
-    </div>
-    <details class="screen">
-      <summary>Sized for a phone screen about <span id="screen-label">6.5</span> cm wide</summary>
-      <label>Phone screen width <input type="number" id="screen-cm" min="3" max="12" step="0.1" value="6.5"> cm</label>
-      <small>Measure across the shorter side of your phone's screen. The border is sized as if the shorter side of the video fills that width.</small>
-    </details>
-    <p class="note" id="plan-note"></p>
-  </fieldset>
-
-  <fieldset>
-    <legend>If the lengths don't match</legend>
-    <label class="opt"><input type="radio" name="mode" value="full" checked>
-      <span>Match the video length<small>Silence fills any gap. Audio that runs longer is cut off.</small></span></label>
-    <label class="opt"><input type="radio" name="mode" value="shorter">
-      <span>Stop at the shorter one<small>The result ends when either the video or the audio ends.</small></span></label>
-  </fieldset>
-
-  <div class="actions">
-    <button type="button" id="go" disabled>Create video</button>
-    <button type="button" id="fallback" class="secondary" hidden>Record in real time instead</button>
-  </div>
-  <p class="status" id="status" role="status" aria-live="polite">Add a video and an audio file to begin.</p>
-  <progress id="prog" max="1" value="0" hidden aria-label="Progress"></progress>
-
-  <section class="result" id="result" hidden aria-labelledby="h-res">
-    <h2 id="h-res">Your video is ready</h2>
-    <video id="out" controls playsinline></video>
-    <div class="actions"><a class="btn" id="download" href="#" download="video.mp4">Download video</a></div>
+  <section>
+    <h2>Background videos</h2>
+    <p class="hint">Add 3 to 5 clips you own or have rights to. Each new video uses a random clip from a random start point.</p>
+    <input id="bgfile" type="file" accept="video/*" multiple aria-label="Add background videos">
+    <ul id="bglist"></ul>
   </section>
-
-  <p class="privacy">Your files stay on your device. The editing tool downloads once from a public CDN, then runs inside your browser. Very large videos may run out of memory, so files under about 500 MB work best.</p>
+  <section>
+    <h2>Voice and captions</h2>
+    <label for="voice">Voice</label>
+    <select id="voice"><optgroup label="US female"><option value="af_heart">Heart</option><option value="af_bella">Bella</option><option value="af_nicole">Nicole</option><option value="af_sarah">Sarah</option><option value="af_sky">Sky</option><option value="af_nova">Nova</option><option value="af_aoede">Aoede</option><option value="af_alloy">Alloy</option><option value="af_jessica">Jessica</option><option value="af_kore">Kore</option><option value="af_river">River</option></optgroup><optgroup label="US male"><option value="am_michael">Michael</option><option value="am_fenrir">Fenrir</option><option value="am_adam">Adam</option><option value="am_eric">Eric</option><option value="am_liam">Liam</option><option value="am_echo">Echo</option><option value="am_onyx">Onyx</option><option value="am_puck">Puck</option><option value="am_santa">Santa</option></optgroup><optgroup label="UK female"><option value="bf_emma">Emma</option><option value="bf_isabella">Isabella</option></optgroup><optgroup label="UK male"><option value="bm_george">George</option><option value="bm_lewis">Lewis</option></optgroup></select>
+    <button id="prev" style="margin-top:8px">Preview this voice</button>
+    <p class="hint" style="margin-top:6px">A sample plays when you pick a voice or speed. The first one takes longer while the voice model downloads.</p>
+    <label for="speed">Speaking speed</label><select id="speed"><option value="0.9">0.9x (slower)</option><option value="1">1x (normal)</option><option value="1.1">1.1x</option><option value="1.25">1.25x</option><option value="1.5">1.5x</option><option value="1.75">1.75x (very fast)</option></select>
+    <label for="wpc">Words per caption</label><input id="wpc" type="number" min="1" max="6">
+    <label for="fmt">Video format</label><select id="fmt"><option value="webm">WebM (most reliable)</option><option value="mp4">MP4 (if your browser supports it)</option></select>
+    <label for="maxmin">Max length of one video (minutes)</label><input id="maxmin" type="number" min="0.5" max="10" step="0.5">
+  </section>
+  <section>
+    <h2>Generate</h2>
+    <p class="hint">Makes a video for every new story in the box. Stories longer than the max length are split into parts automatically.</p>
+    <p class="hint" style="margin-top:10px">Stories used so far: <b id="usedn">0</b> <button class="link" id="reset">Reset history</button></p>
+    <button class="go" id="go">Make videos</button>
+    <button id="stop" style="width:100%;margin-top:8px" hidden>Stop after this story</button>
+  </section>
+</aside>
+<div class="stage">
+  <canvas id="cv" width="720" height="1280" aria-label="Video preview"></canvas>
+  <div class="out">
+    <h2>Progress</h2>
+    <pre id="log" role="log"></pre>
+    <progress id="bar" value="0" max="1" hidden></progress>
+    <div id="results"></div>
+    <p class="hint" style="margin-top:18px">Videos record in real time, so a 2 minute story takes 2 minutes. Keep this tab open and in front while it works.</p>
+  </div>
+</div>
 </main>
 
-<script>
-(() => {
-  const $ = (s) => document.querySelector(s);
-  const state = { video: null, audio: null, vDur: NaN, aDur: NaN, vW: 0, vH: 0, peaks: null, ffmpeg: null, ffLoading: null, outUrl: null };
+<script type="module">
+const $ = s => document.querySelector(s);
+const LS = {get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set:(k,v)=>localStorage.setItem(k,JSON.stringify(v))};
+const W=720,H=1280, cv=$('#cv'), g=cv.getContext('2d');
+const log = m => { const l=$('#log'); l.textContent+=m+'\n'; l.scrollTop=l.scrollHeight; };
 
-  const fmt = (s) => { if (!isFinite(s)) return ''; const m = Math.floor(s / 60), r = Math.round(s % 60); return `${m}:${String(r).padStart(2, '0')}`; };
-  const setStatus = (msg, kind = '') => { const el = $('#status'); el.textContent = msg; el.className = 'status ' + kind; };
-  const setProgress = (v) => { const p = $('#prog'); if (v == null) { p.hidden = true; return; } p.hidden = false; p.value = Math.max(0, Math.min(1, v)); };
-  const zoneError = (kind, msg) => { const el = $('#err-' + kind); el.hidden = !msg; el.textContent = msg || ''; };
-  const extOf = (f, fallback) => ((f.name.split('.').pop() || fallback).toLowerCase().replace(/[^a-z0-9]/g, '')) || fallback;
-  const isVideo = (f) => f.type.startsWith('video/') || /\.(mp4|mov|m4v|webm)$/i.test(f.name);
-  const isAudio = (f) => f.type.startsWith('audio/') || /\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(f.name);
+/* ---------- saved settings ---------- */
+const defaults={stories:'',voice:'af_heart',wpc:3,fmt:'webm',maxmin:2,speed:'1'};
+const S={...defaults,...LS.get('cc_settings',{})};
+for(const k in defaults){ const el=$('#'+k); el.value=S[k]; el.addEventListener('input',()=>{S[k]=el.type==='number'?+el.value:el.value;LS.set('cc_settings',S)}); }
+let used=new Set(LS.get('cc_used',[]));
+const showUsed=()=>$('#usedn').textContent=used.size; showUsed();
+$('#reset').onclick=()=>{ if(confirm('Forget every story used so far? They could be picked again.')){used.clear();LS.set('cc_used',[]);showUsed();} };
 
-  // ---------- picking files
-  function setFile(kind, file) {
-    zoneError(kind, '');
-    if (!file) return;
-    if (kind === 'video' ? !isVideo(file) : !isAudio(file)) {
-      zoneError(kind, kind === 'video' ? 'That doesn\'t look like a video. Try an MP4, MOV or WebM file.' : 'That doesn\'t look like audio. Try an MP3, WAV, M4A, AAC or OGG file.');
-      return;
+/* ---------- background library (IndexedDB) ---------- */
+const dbp=new Promise((res,rej)=>{const r=indexedDB.open('cc_store',1);r.onupgradeneeded=()=>r.result.createObjectStore('bgs',{keyPath:'id'});r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
+const tx=async(mode,fn)=>{const db=await dbp;return new Promise((res,rej)=>{const t=db.transaction('bgs',mode);const o=fn(t.objectStore('bgs'));t.oncomplete=()=>res(o&&o.result);t.onerror=()=>rej(t.error)})};
+const allBgs=()=>tx('readonly',s=>s.getAll());
+async function renderBgs(){
+  const list=await allBgs(); const ul=$('#bglist'); ul.innerHTML='';
+  if(!list.length){ul.innerHTML='<li><span>No clips yet. Add one above.</span></li>';return}
+  for(const b of list){
+    const li=document.createElement('li'); const sp=document.createElement('span'); sp.textContent=`${b.name} (${(b.blob.size/1e6).toFixed(1)} MB)`;
+    const x=document.createElement('button'); x.className='link'; x.textContent='Remove'; x.onclick=async()=>{await tx('readwrite',s=>s.delete(b.id));renderBgs()};
+    li.append(sp,x); ul.append(li);
+  }
+}
+$('#bgfile').onchange=async e=>{
+  for(const f of e.target.files){
+    if((await allBgs()).length>=5){alert('Limit is 5 clips. Remove one first.');break}
+    await tx('readwrite',s=>s.put({id:crypto.randomUUID(),name:f.name,blob:f}));
+  }
+  e.target.value=''; renderBgs();
+};
+renderBgs();
+
+/* ---------- idle preview ---------- */
+function idle(){ g.fillStyle='#0b141a';g.fillRect(0,0,W,H);g.fillStyle='#5A6B77';g.font='600 40px sans-serif';g.textAlign='center';g.fillText('Preview',W/2,H/2); }
+idle();
+
+/* ---------- stories (pasted by you) ---------- */
+const clean=t=>t.replace(/^\s*(edit|update|tl;?dr)\b.*$/gim,'').replace(/\[([^\]]+)\]\([^)]+\)/g,'$1').replace(/https?:\/\/\S+/g,'')
+  .replace(/[*_~`>#^]+/g,'').replace(/\s*\n\s*/g,' ').replace(/\s{2,}/g,' ').trim();
+const hash=s=>{let h=5381;for(const c of s)h=((h<<5)+h+c.charCodeAt(0))|0;return 'p'+(h>>>0).toString(36)+s.length};
+function pickStory(){
+  const blocks=S.stories.split(/^\s*-{3,}\s*$/m).map(b=>b.trim()).filter(Boolean);
+  if(!blocks.length) throw new Error('Paste at least one story in the Stories box.');
+  for(const raw of blocks){
+    const id=hash(raw); if(used.has(id)) continue;
+    const lines=raw.split('\n'), first=clean(lines[0]), rest=clean(lines.slice(1).join('\n'));
+    const title=rest?first:'', body=rest||first;
+    const nw=body.split(/\s+/).length+(title?title.split(/\s+/).length:0); if(nw<5) continue;
+    return {id,sub:'story',title,body};
+  }
+  throw new Error('No new stories left. Paste more (stories already used are skipped).');
+}
+
+/* ---------- text to speech (Kokoro, runs locally) ---------- */
+const workerSrc=`
+import {KokoroTTS} from 'https://cdn.jsdelivr.net/npm/kokoro-js@1.2.0/+esm';
+let tts;
+self.onmessage=async e=>{
+  const {id,type,text,voice,speed}=e.data;
+  try{
+    if(type==='load'){
+      tts=await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX',{dtype:'q8',device:'wasm',
+        progress_callback:p=>{if(p.status==='progress')self.postMessage({id,progress:p.progress/100})}});
+      self.postMessage({id,done:true});
+    }else{
+      const a=await tts.generate(text,{voice,speed});
+      self.postMessage({id,done:true,audio:a.audio,rate:a.sampling_rate});
     }
-    state[kind] = file;
-    const url = URL.createObjectURL(file);
-    $('#name-' + kind).textContent = file.name;
-    $('#prompt-' + kind).hidden = true;
-    $('#filled-' + kind).hidden = false;
-    $('#zone-' + kind).classList.add('has-file');
-    const player = $('#player-' + kind);
-    player.src = url;
-    player.onloadedmetadata = () => {
-      state[kind === 'video' ? 'vDur' : 'aDur'] = player.duration;
-      if (kind === 'video') { state.vW = player.videoWidth; state.vH = player.videoHeight; updatePlan(); }
-      $('#dur-' + kind).textContent = fmt(player.duration);
-      updateTimeline();
-    };
-    player.onerror = () => zoneError(kind, 'Your browser can\'t play this file. Try converting it to MP4 (video) or MP3 (audio).');
-    if (kind === 'audio') drawFor(file);
-    refresh();
-    getFFmpeg().catch(() => {}); // warm up in the background
+  }catch(err){self.postMessage({id,error:String((err&&err.message)||err)})}
+};`;
+let worker, msgId=0; const pending={};
+function callWorker(msg,onProgress){
+  if(!worker){
+    worker=new Worker(URL.createObjectURL(new Blob([workerSrc],{type:'text/javascript'})),{type:'module'});
+    worker.onmessage=e=>{const m=e.data,p=pending[m.id]; if(!p) return;
+      if(m.progress!==undefined&&!m.done){p.onProgress&&p.onProgress(m.progress);return}
+      delete pending[m.id]; m.error?p.rej(new Error(m.error)):p.res(m)};
+    worker.onerror=e=>{for(const id in pending){pending[id].rej(new Error('Voice worker failed: '+(e.message||'could not load model code')));delete pending[id]} worker=null};
   }
-  for (const kind of ['video', 'audio']) {
-    const zone = $('#zone-' + kind);
-    $('#file-' + kind).addEventListener('change', (e) => { setFile(kind, e.target.files[0]); e.target.value = ''; });
-    zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('drag'); });
-    zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
-    zone.addEventListener('drop', (e) => { e.preventDefault(); zone.classList.remove('drag'); setFile(kind, e.dataTransfer.files[0]); });
+  return new Promise((res,rej)=>{const id=++msgId;pending[id]={res,rej,onProgress};worker.postMessage({...msg,id})});
+}
+let ready;
+async function loadTTS(){
+  if(!ready){
+    log('Loading voice model (about 80 MB the first time, cached after). The page stays usable while this runs...');
+    const bar=$('#bar'); bar.hidden=false; bar.value=0;
+    ready=callWorker({type:'load'},p=>{bar.value=p}).then(()=>{bar.hidden=true;log('Voice model ready.')});
+    ready.catch(()=>{ready=null;bar.hidden=true});
   }
-  function refresh() {
-    $('#go').disabled = !(state.video && state.audio);
-    if (state.video && state.audio) setStatus('Ready. Press Create video.');
-    else if (state.video) setStatus('Now add the audio you want to use.');
-    else if (state.audio) setStatus('Now add the video.');
+  await ready;
+}
+const gen=text=>callWorker({type:'gen',text,voice:S.voice,speed:+S.speed||1});
+function sentences(text){
+  const out=[]; for(const s of text.split(/(?<=[.!?])\s+/)){
+    if(s.length<=220){out.push(s);continue}
+    let cur=''; for(const part of s.split(/(?<=,)\s+/)){ if((cur+part).length>220&&cur){out.push(cur);cur=part}else cur+=(cur?' ':'')+part } if(cur)out.push(cur);
+  } return out.filter(s=>s.trim());
+}
+let stopReq=false;
+async function speak(story){
+  await loadTTS();
+  const parts=sentences((story.title?story.title+(/[.!?]$/.test(story.title)?' ':'. '):'')+story.body);
+  const rate=24000, out=[];
+  for(let i=0;i<parts.length;i++){
+    if(stopReq){const e=new Error('Stopped');e.stopped=true;throw e}
+    log(`Speaking ${i+1}/${parts.length}`); $('#bar').hidden=false; $('#bar').value=i/parts.length;
+    const a=await gen(parts[i]), data=a.audio, dur=data.length/rate;
+    const ws=parts[i].split(/\s+/).filter(Boolean), tot=ws.reduce((n,w)=>n+w.length+1,0); let c=0; const words=[];
+    for(const w of ws){ const st=dur*c/tot; c+=w.length+1; words.push({w,s:st,e:dur*c/tot}); }
+    out.push({data,dur,words});
   }
+  $('#bar').hidden=true;
+  return out;
+}
+function buildPart(g){
+  const rate=24000, gap=Math.round(rate*0.18), len=g.reduce((n,x)=>n+x.data.length+gap,0);
+  const pcm=new Float32Array(len), words=[]; let pos=0;
+  for(const x of g){ pcm.set(x.data,pos); const t0=pos/rate; for(const w of x.words) words.push({w:w.w,s:t0+w.s,e:t0+w.e}); pos+=x.data.length+gap; }
+  return {pcm,rate,words,duration:len/rate};
+}
+function splitParts(sents){
+  const gapS=0.18, maxSec=(S.maxmin>0?S.maxmin:2)*60;
+  const total=sents.reduce((n,x)=>n+x.dur+gapS,0), n=Math.max(1,Math.ceil(total/maxSec)), target=total/n;
+  const groups=[]; let cur=[], d=0;
+  for(const x of sents){
+    if(cur.length&&d+x.dur+gapS>maxSec){groups.push(cur);cur=[];d=0}
+    cur.push(x); d+=x.dur+gapS;
+    if(d>=target&&groups.length<n-1){groups.push(cur);cur=[];d=0}
+  }
+  if(cur.length) groups.push(cur);
+  return groups.map(buildPart);
+}
 
-  // ---------- timeline + waveform
-  function updateTimeline() {
-    const tl = $('#timeline');
-    if (!isFinite(state.vDur) || !isFinite(state.aDur)) { tl.hidden = true; return; }
-    tl.hidden = false;
-    const max = Math.max(state.vDur, state.aDur);
-    $('#bar-v').style.width = (state.vDur / max * 100) + '%';
-    $('#bar-a').style.width = (state.aDur / max * 100) + '%';
-    $('#t-v').textContent = fmt(state.vDur); $('#t-a').textContent = fmt(state.aDur);
-    const diff = state.aDur - state.vDur;
-    $('#tl-note').textContent = Math.abs(diff) < 0.5 ? 'The lengths match.'
-      : diff > 0 ? `The audio is ${fmt(diff)} longer than the video.` : `The video is ${fmt(-diff)} longer than the audio.`;
+/* ---------- captions + recording ---------- */
+function drawBg(v){
+  const r=Math.max(W/v.videoWidth,H/v.videoHeight), w=v.videoWidth*r, h=v.videoHeight*r;
+  g.drawImage(v,(W-w)/2,(H-h)/2,w,h); g.fillStyle='rgba(0,0,0,.18)'; g.fillRect(0,0,W,H);
+}
+function drawCaption(words,t){
+  let i=words.findIndex(x=>x.e>=t); if(i<0) i=words.length-1; if(words[i].s>t&&i>0) i--;
+  const a=i-(i%S.wpc), grp=words.slice(a,a+S.wpc);
+  const size=70; g.font=`700 ${size}px "Familjen Grotesk",Arial`;
+  g.textAlign='left'; g.textBaseline='middle'; g.lineJoin='round'; g.lineWidth=size/6;
+  const sp=g.measureText(' ').width, maxW=W-100;
+  const items=grp.map((x,k)=>{const u=x.w.toUpperCase();return {t:u,w:g.measureText(u).width,hot:a+k===i}});
+  const lines=[]; let line=[], lw=0;
+  for(const it of items){
+    const add=(line.length?sp:0)+it.w;
+    if(line.length&&lw+add>maxW){lines.push({line,lw});line=[];lw=0}
+    lw+=(line.length?sp:0)+it.w; line.push(it);
   }
-  async function drawFor(file) {
-    state.peaks = null; drawWave();
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return;
-    const ctx = new AC();
-    try {
-      const buf = await ctx.decodeAudioData(await file.arrayBuffer());
-      const ch = buf.getChannelData(0), n = 160, step = Math.max(1, Math.floor(ch.length / n)), skip = Math.max(1, Math.floor(step / 64));
-      const peaks = [];
-      for (let i = 0; i < n; i++) { let m = 0; for (let j = i * step; j < (i + 1) * step && j < ch.length; j += skip) m = Math.max(m, Math.abs(ch[j])); peaks.push(m); }
-      const top = Math.max(...peaks) || 1;
-      state.peaks = peaks.map((p) => p / top);
-      drawWave();
-    } catch (e) { /* waveform is optional */ } finally { ctx.close(); }
-  }
-  function drawWave() {
-    const c = $('#wave'); if (!c || c.offsetParent === null) return;
-    const dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
-    c.width = w * dpr; c.height = h * dpr;
-    const g = c.getContext('2d'); g.scale(dpr, dpr); g.clearRect(0, 0, w, h);
-    g.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--wave').trim();
-    const peaks = state.peaks || new Array(160).fill(0.06), bw = w / peaks.length;
-    peaks.forEach((p, i) => { const bh = Math.max(2, p * h); g.fillRect(i * bw + 0.5, (h - bh) / 2, Math.max(1, bw - 1.5), bh); });
-  }
-  addEventListener('resize', drawWave);
-  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', drawWave);
-
-  // ---------- ffmpeg.wasm (single-thread build, works on GitHub Pages)
-  const CDNS = [['jsDelivr', 'https://cdn.jsdelivr.net/npm'], ['unpkg', 'https://unpkg.com']];
-  const errText = (e) => String((e && e.message) || e || 'unknown error').replace(/\s+/g, ' ').slice(0, 160);
-  const loadScript = (src) => new Promise((res, rej) => {
-    const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('could not download ' + src.split('/').slice(2, 5).join('/'))); document.head.appendChild(s);
+  if(line.length) lines.push({line,lw});
+  const lh=size*1.2, y0=H/2-(lines.length-1)*lh/2;
+  lines.forEach((L,r)=>{
+    let x=(W-L.lw)/2; const y=y0+r*lh;
+    for(const it of L.line){ g.strokeStyle='#000'; g.strokeText(it.t,x,y); g.fillStyle=it.hot?'#F2B134':'#fff'; g.fillText(it.t,x,y); x+=it.w+sp; }
   });
-  const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timed out after ' + ms / 1000 + 's')), ms))]);
-  function getFFmpeg() {
-    if (state.ffmpeg) return Promise.resolve(state.ffmpeg);
-    if (state.ffLoading) return state.ffLoading;
-    state.ffLoading = (async () => {
-      const problems = [];
-      for (const [cdnName, cdn] of CDNS) {
-        try {
-          if (!window.FFmpegWASM) await loadScript(`${cdn}/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js`);
-          if (!window.FFmpegUtil) await loadScript(`${cdn}/@ffmpeg/util@0.12.1/dist/umd/index.js`);
-        } catch (e) { problems.push(`${cdnName}: ${errText(e)}`); continue; }
-        // The tool comes in two flavours; if one fails to start in this browser, the other often works.
-        for (const flavor of ['umd', 'esm']) {
-          const ff = new window.FFmpegWASM.FFmpeg();
-          try {
-            const { toBlobURL } = window.FFmpegUtil;
-            ff.on('progress', ({ progress }) => { if (state.busy && progress >= 0 && progress <= 1) setProgress(0.2 + progress * 0.7); });
-            await withTimeout(ff.load({
-              classWorkerURL: await toBlobURL(`${cdn}/@ffmpeg/ffmpeg@0.12.10/dist/umd/814.ffmpeg.js`, 'text/javascript'),
-              coreURL: await toBlobURL(`${cdn}/@ffmpeg/core@0.12.6/dist/${flavor}/ffmpeg-core.js`, 'text/javascript'),
-              wasmURL: await toBlobURL(`${cdn}/@ffmpeg/core@0.12.6/dist/${flavor}/ffmpeg-core.wasm`, 'application/wasm'),
-            }), 120000);
-            state.ffmpeg = ff; return ff;
-          } catch (e) {
-            problems.push(`${cdnName} ${flavor}: ${errText(e)}`);
-            try { ff.terminate(); } catch (x) {}
-          }
-        }
+}
+function drawLabel(t){g.font='700 64px "Familjen Grotesk",Arial';g.textAlign='center';g.textBaseline='middle';g.lineJoin='round';g.lineWidth=12;g.strokeStyle='#000';g.strokeText(t,W/2,200);g.fillStyle='#fff';g.fillText(t,W/2,200);}
+async function record(bg,speech,label){
+  const vid=document.createElement('video'); vid.src=URL.createObjectURL(bg.blob); vid.muted=true; vid.loop=true; vid.playsInline=true;
+  vid.style.cssText='position:fixed;left:0;top:0;width:2px;height:2px;opacity:.01;pointer-events:none'; document.body.appendChild(vid);
+  await new Promise((res,rej)=>{vid.onloadedmetadata=res;vid.onerror=()=>rej(new Error('Could not read clip '+bg.name))});
+  if(vid.duration>speech.duration+2) vid.currentTime=Math.random()*(vid.duration-speech.duration-1);
+  const ac=new AudioContext(); await ac.resume();
+  const buf=ac.createBuffer(1,speech.pcm.length,speech.rate); buf.copyToChannel(speech.pcm,0);
+  const dest=ac.createMediaStreamDestination(), src=ac.createBufferSource(); src.buffer=buf; src.connect(dest);
+  const mimes=S.fmt==='mp4'?['video/mp4;codecs=avc1,mp4a.40.2','video/mp4','video/webm;codecs=vp9,opus','video/webm']:['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm','video/mp4'];
+  const mime=mimes.find(m=>MediaRecorder.isTypeSupported(m));
+  const stream=new MediaStream([...cv.captureStream(30).getVideoTracks(),...dest.stream.getAudioTracks()]);
+  const rec=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:6e6}), parts=[];
+  rec.ondataavailable=e=>e.data.size&&parts.push(e.data);
+  rec.onerror=e=>log('Recorder error: '+((e.error&&e.error.message)||'unknown'));
+  const done=new Promise(r=>rec.onstop=r);
+  if(document.hidden){
+    log('Voice is ready. Switch back to this tab so recording can start...');
+    await new Promise(r=>{const f=()=>{if(!document.hidden){document.removeEventListener('visibilitychange',f);r()}};document.addEventListener('visibilitychange',f)});
+  }
+  for(let k=0;;k++){ try{ await vid.play(); break; }catch(e){ if(k>=3) throw e; await new Promise(r=>setTimeout(r,500)); } }
+  rec.start(500); const t0=ac.currentTime; src.start(); let live=true;
+  src.onended=()=>setTimeout(()=>{live=false;clearInterval(timer);rec.stop()},400);
+  const timer=setInterval(()=>{ try{ if(vid.paused&&!document.hidden) vid.play().catch(()=>{}); drawBg(vid); drawCaption(speech.words,ac.currentTime-t0); if(label) drawLabel(label); }catch(e){ log('Draw error: '+e.message); } },33);
+  await done; vid.pause(); vid.remove(); URL.revokeObjectURL(vid.src); ac.close();
+  const blob=new Blob(parts,{type:mime.split(';')[0]});
+  if(blob.size<Math.max(2000,speech.duration*30000)) throw new Error('Recording is too small ('+(blob.size/1e6).toFixed(2)+' MB for '+Math.round(speech.duration)+' seconds), so the picture is probably missing. Format used: '+mime+'. Try the other format under Voice and captions.');
+  log('Recorded '+(blob.size/1e6).toFixed(1)+' MB as '+mime);
+  return {blob,ext:mime.startsWith('video/mp4')?'mp4':'webm'};
+}
+
+/* ---------- voice preview (plays automatically when you pick a voice or speed) ---------- */
+let prevToken=0, prevAc=null; const prevCache=new Map();
+async function preview(){
+  const my=++prevToken, b=$('#prev'), key=S.voice+'|'+S.speed;
+  if(prevAc){ try{prevAc.close()}catch{} prevAc=null; }
+  b.textContent='Loading voice...';
+  try{
+    let audio=prevCache.get(key);
+    if(!audio){
+      await loadTTS(); if(my!==prevToken) return;
+      audio=(await gen('So this happened last week, and honestly I still cannot believe it.')).audio; prevCache.set(key,audio);
+    }
+    if(my!==prevToken) return;
+    const ac=new AudioContext(); prevAc=ac; await ac.resume();
+    const buf=ac.createBuffer(1,audio.length,24000); buf.copyToChannel(audio,0);
+    const src=ac.createBufferSource(); src.buffer=buf; src.connect(ac.destination);
+    src.onended=()=>{ if(prevAc===ac) prevAc=null; ac.close().catch(()=>{}); }; src.start();
+  }catch(e){ log('Preview failed: '+e.message); }
+  finally{ if(my===prevToken) b.textContent='Preview this voice'; }
+}
+$('#prev').onclick=preview; $('#voice').addEventListener('change',preview); $('#speed').addEventListener('change',preview);
+
+/* ---------- main ---------- */
+$('#stop').onclick=()=>{stopReq=true;$('#stop').textContent='Stopping after this story...'};
+$('#go').onclick=async()=>{
+  const btn=$('#go'), sb=$('#stop'); btn.disabled=true; sb.hidden=false; sb.textContent='Stop after this story'; stopReq=false; $('#log').textContent='';
+  let made=0;
+  try{
+    const bgs=await allBgs(); if(!bgs.length) throw new Error('Add at least one background video first.');
+    while(!stopReq){
+      let story; try{ story=pickStory(); }catch(e){ if(made){ log('No more new stories. All done.'); break } throw e }
+      log('--- Story: '+(story.title||story.body).slice(0,70)+' ---');
+      const parts=splitParts(await speak(story));
+      if(parts.length>1) log(`Splitting into ${parts.length} parts.`);
+      for(let i=0;i<parts.length;i++){
+        const multi=parts.length>1, bg=bgs[Math.floor(Math.random()*bgs.length)];
+        log(`Recording ${multi?'part '+(i+1)+' of '+parts.length:'video'} with ${bg.name} (${Math.round(parts[i].duration)} seconds)...`);
+        const out=await record(bg,parts[i],multi?'PART '+(i+1):'');
+        const url=URL.createObjectURL(out.blob), d=document.createElement('div'); d.className='vid';
+        const file=new File([out.blob],`${story.id}${multi?'_part'+(i+1):''}.${out.ext}`,{type:out.blob.type});
+        const canShare=!!(navigator.canShare&&navigator.canShare({files:[file]}));
+        d.innerHTML=`<video src="${url}" controls playsinline></video><div><small></small><a download="${file.name}" href="${url}">Download .${out.ext} (${(out.blob.size/1e6).toFixed(1)} MB)</a>${canShare?'<br><button class="share" style="margin-top:8px">Share to TikTok / Instagram</button>':''}</div>`;
+        d.querySelector('small').textContent=(story.title||story.body).slice(0,80)+(multi?` (part ${i+1})`:'');
+        const shb=d.querySelector('.share');
+        if(shb) shb.onclick=async()=>{try{await navigator.share({files:[file]})}catch(e){if(e.name!=='AbortError')log('Share failed: '+e.message)}};
+        $('#results').prepend(d);
       }
-      state.ffLoading = null;
-      const hint = location.protocol === 'file:' ? ' You opened this page from your computer. Open it from your GitHub Pages address instead.' : '';
-      throw new Error('Details: ' + problems.join(' | ') + '.' + hint);
-    })();
-    return state.ffLoading;
-  }
-
-  // ---------- shape (portrait / landscape) and border
-  const shape = () => document.querySelector('input[name=shape]:checked').value;
-  const fit = () => document.querySelector('input[name=fit]:checked').value;
-  const evenN = (n) => Math.max(2, Math.floor(n / 2) * 2);
-  const marginCm = () => { const v = parseFloat($('#margin-num').value); return isFinite(v) ? Math.max(0, Math.min(1.5, v)) : 0; };
-  const screenCm = () => { const v = parseFloat($('#screen-cm').value); return isFinite(v) && v >= 3 ? v : 6.5; };
-  // Returns the output size when the video must be resized to a new shape, or null when it can stay as it is.
-  function target() {
-    const s = shape();
-    if (s === 'keep' || !state.vW || !state.vH) return null;
-    const srcPortrait = state.vH > state.vW;
-    if ((s === 'portrait' && srcPortrait) || (s === 'landscape' && !srcPortrait)) return null;
-    return s === 'portrait' ? { w: 720, h: 1280 } : { w: 1280, h: 720 };
-  }
-  // The full plan: output size plus the border in pixels. Null means the video can be copied untouched.
-  function plan() {
-    if (!state.vW || !state.vH) return null;
-    const t = target();
-    const w = t ? t.w : evenN(state.vW), h = t ? t.h : evenN(state.vH);
-    let m = Math.round(marginCm() / screenCm() * Math.min(w, h));
-    m = Math.floor(Math.min(m, Math.min(w, h) / 4) / 2) * 2;
-    if (!t && m === 0) return null;
-    return { w, h, m, resize: !!t };
-  }
-  function filterFor(p) {
-    const iw = p.w - 2 * p.m, ih = p.h - 2 * p.m;
-    const first = p.resize && fit() === 'crop'
-      ? `scale=${iw}:${ih}:force_original_aspect_ratio=increase,crop=${iw}:${ih}`
-      : `scale=${iw}:${ih}:force_original_aspect_ratio=decrease`;
-    return `${first},pad=${p.w}:${p.h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1`;
-  }
-  function updatePlan() {
-    const t = target(), s = shape(), info = $('#shape-info'), p = plan();
-    $('#fit-group').hidden = !t;
-    info.hidden = !(s !== 'keep' && state.vW && !t);
-    if (!info.hidden) info.textContent = `Your video is already ${s}, so its shape stays as it is.`;
-    $('#screen-label').textContent = screenCm();
-    const note = $('#plan-note');
-    if (!state.vW) note.textContent = 'Add a video to see what the final size will be.';
-    else if (!p) note.textContent = 'Only the sound changes. The picture is copied as it is, which is fast.';
-    else note.textContent = `Final video: ${p.w} x ${p.h}` + (p.m ? `, with a ${p.m} px black border on every side (${marginCm().toFixed(1)} cm on the phone screen)` : '') + '. The picture is re-encoded, so this takes longer.';
-    // preview of the border
-    const pw = p ? p.w : (state.vW || 9), ph = p ? p.h : (state.vH || 16), box = $('#pv'), inner = $('#pv-in');
-    box.style.width = Math.round(120 * pw / ph) + 'px';
-    const m = p ? p.m : 0;
-    inner.style.inset = `${m / ph * 100}% ${m / pw * 100}%`;
-  }
-  const syncMargin = (from, to) => from.addEventListener('input', () => { to.value = from.value; updatePlan(); });
-  syncMargin($('#margin-range'), $('#margin-num')); syncMargin($('#margin-num'), $('#margin-range'));
-  $('#screen-cm').addEventListener('input', updatePlan);
-  document.querySelectorAll('input[name=shape]').forEach((r) => r.addEventListener('change', updatePlan));
-  updatePlan();
-
-  // ---------- create
-  const mode = () => document.querySelector('input[name=mode]:checked').value;
-  const outName = () => state.video.name.replace(/\.[^.]+$/, '') + '-new-audio';
-  function showResult(blob, ext) {
-    if (state.outUrl) URL.revokeObjectURL(state.outUrl);
-    state.outUrl = URL.createObjectURL(blob);
-    $('#out').src = state.outUrl;
-    const a = $('#download'); a.href = state.outUrl; a.download = outName() + '.' + ext;
-    $('#result').hidden = false;
-    $('#result').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
-  }
-  function busy(on) { state.busy = on; $('#go').disabled = on || !(state.video && state.audio); $('#fallback').disabled = on; }
-
-  async function create() {
-    busy(true); $('#result').hidden = true; $('#fallback').hidden = true; setProgress(0.02);
-    try {
-      setStatus('Loading the editing tool. This only happens once.');
-      const ff = await getFFmpeg();
-      setProgress(0.1); setStatus('Reading your files.');
-      const vExt = extOf(state.video, 'mp4'), aExt = extOf(state.audio, 'mp3');
-      const vIn = 'in_video.' + vExt, aIn = 'in_audio.' + aExt;
-      await ff.writeFile(vIn, new Uint8Array(await state.video.arrayBuffer()));
-      await ff.writeFile(aIn, new Uint8Array(await state.audio.arrayBuffer()));
-      setProgress(0.2); setStatus('Replacing the sound.');
-      const len = mode() === 'shorter' ? Math.min(state.vDur, state.aDur) : state.vDur;
-      const base = ['-i', vIn, '-i', aIn, '-map', '0:v:0', '-map', '1:a:0'];
-      const tail = ['-c:a', 'aac', '-b:a', '192k'];
-      if (mode() === 'full') tail.push('-af', 'apad');
-      tail.push(...(isFinite(len) ? ['-t', len.toFixed(3)] : ['-shortest']), '-movflags', '+faststart', 'output.mp4');
-      const enc = ['-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-pix_fmt', 'yuv420p'];
-      const pl = plan();
-      let code;
-      if (pl) {
-        setStatus(`Adding the border${pl.resize ? ', resizing' : ''} and replacing the sound. This takes longer.`);
-        code = await ff.exec([...base, '-vf', filterFor(pl), ...enc, ...tail]);
-      } else {
-        code = await ff.exec([...base, '-c:v', 'copy', ...tail]);
-        if (code !== 0) {
-          setStatus('Re-encoding the video so it fits an MP4. This takes longer.');
-          try { await ff.deleteFile('output.mp4'); } catch (e) {}
-          code = await ff.exec([...base, ...enc, ...tail]);
-        }
-      }
-      if (code !== 0) throw new Error('The editing tool could not process these files.');
-      const data = await ff.readFile('output.mp4');
-      for (const f of [vIn, aIn, 'output.mp4']) { try { await ff.deleteFile(f); } catch (e) {} }
-      showResult(new Blob([data.buffer], { type: 'video/mp4' }), 'mp4');
-      setProgress(null); setStatus('Done. Your video has the new sound.', 'ok');
-    } catch (e) {
-      console.error(e); setProgress(null);
-      setStatus((state.ffmpeg ? 'Something went wrong: ' : 'The editing tool could not load. ') + String((e && e.message) || e), 'err');
-      if (window.MediaRecorder) $('#fallback').hidden = false;
-    } finally { busy(false); }
-  }
-  $('#go').addEventListener('click', create);
-
-  // ---------- fallback: record in real time (no downloads needed, but takes as long as the video)
-  async function recordInstead() {
-    busy(true); $('#fallback').hidden = true; $('#result').hidden = true;
-    const url = URL.createObjectURL(state.video);
-    const v = document.createElement('video'); v.src = url; v.muted = true; v.playsInline = true;
-    const AC = window.AudioContext || window.webkitAudioContext; const ctx = new AC();
-    try {
-      setStatus('Preparing. Keep this tab open and in front while it records.');
-      await new Promise((res, rej) => { v.onloadedmetadata = res; v.onerror = () => rej(new Error('The video could not be read.')); });
-      const buf = await ctx.decodeAudioData(await state.audio.arrayBuffer());
-      const dest = ctx.createMediaStreamDestination(), src = ctx.createBufferSource(); src.buffer = buf; src.connect(dest);
-      const pl = plan(); let drawLoop = null, vTracks;
-      if (pl) {
-        const c = document.createElement('canvas'); c.width = pl.w; c.height = pl.h; const g = c.getContext('2d');
-        const ix = pl.m, iy = pl.m, iw = pl.w - 2 * pl.m, ih = pl.h - 2 * pl.m;
-        drawLoop = () => {
-          if (finished) return;
-          const vw = v.videoWidth, vh = v.videoHeight, cover = pl.resize && fit() === 'crop';
-          const k = cover ? Math.max(iw / vw, ih / vh) : Math.min(iw / vw, ih / vh), dw = vw * k, dh = vh * k;
-          g.fillStyle = '#000'; g.fillRect(0, 0, pl.w, pl.h);
-          g.save(); g.beginPath(); g.rect(ix, iy, iw, ih); g.clip();
-          g.drawImage(v, ix + (iw - dw) / 2, iy + (ih - dh) / 2, dw, dh);
-          g.restore();
-          requestAnimationFrame(drawLoop);
-        };
-        vTracks = c.captureStream(30).getVideoTracks();
-      } else {
-        const cap = (v.captureStream || v.mozCaptureStream); if (!cap) throw new Error('This browser can\'t record video. Try Chrome, Edge or Firefox.');
-        vTracks = cap.call(v).getVideoTracks();
-      }
-      const stream = new MediaStream([...vTracks, ...dest.stream.getAudioTracks()]);
-      const mime = ['video/mp4;codecs=avc1,mp4a.40.2', 'video/webm;codecs=vp9,opus', 'video/webm'].find((m) => MediaRecorder.isTypeSupported(m));
-      let finished = false;
-      const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined), chunks = [];
-      rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
-      const stopped = new Promise((r) => (rec.onstop = r));
-      const total = mode() === 'shorter' ? Math.min(state.vDur, state.aDur) : state.vDur;
-      const finish = () => { if (finished) return; finished = true; v.pause(); try { src.stop(); } catch (e) {} rec.stop(); };
-      rec.start(); await ctx.resume(); await v.play(); src.start(); if (drawLoop) drawLoop();
-      v.onended = finish; setTimeout(finish, total * 1000 + 300);
-      const tick = setInterval(() => { setProgress(v.currentTime / total); setStatus(`Recording in real time: ${fmt(v.currentTime)} of ${fmt(total)}. Keep this tab open.`); if (finished) clearInterval(tick); }, 400);
-      await stopped; clearInterval(tick);
-      const type = (rec.mimeType || 'video/webm').split(';')[0];
-      showResult(new Blob(chunks, { type }), type.includes('mp4') ? 'mp4' : 'webm');
-      setProgress(null); setStatus('Done. Your video has the new sound.', 'ok');
-    } catch (e) {
-      console.error(e); setProgress(null); setStatus('Recording failed: ' + String((e && e.message) || e), 'err');
-    } finally { ctx.close(); URL.revokeObjectURL(url); busy(false); }
-  }
-  $('#fallback').addEventListener('click', recordInstead);
-})();
+      used.add(story.id); LS.set('cc_used',[...used]); showUsed(); made++; log('Story done.');
+    }
+    if(stopReq) log('Stopped.');
+  }catch(e){ if(e.stopped) log('Stopped.'); else log('Error: '+e.message); }
+  finally{ btn.disabled=false; sb.hidden=true; idle(); }
+};
 </script>
 </body>
 </html>
